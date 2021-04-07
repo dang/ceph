@@ -4,6 +4,7 @@
 #include "rgw_op.h"
 #include "rgw_bucket.h"
 #include "rgw_rest_bucket.h"
+#include "rgw_bucket_admin.h"
 #include "rgw_sal.h"
 
 #include "include/str_list.h"

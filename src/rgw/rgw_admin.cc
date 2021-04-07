@@ -35,6 +35,7 @@ extern "C" {
 
 #include "rgw_user.h"
 #include "rgw_bucket.h"
+#include "rgw_bucket_admin.h"
 #include "rgw_otp.h"
 #include "rgw_rados.h"
 #include "rgw_acl.h"

@@ -463,13 +463,13 @@ int radosgw_Main(int argc, const char **argv)
     RGWRESTMgr_Admin *admin_resource = new RGWRESTMgr_Admin;
     admin_resource->register_resource("usage", new RGWRESTMgr_Usage);
     admin_resource->register_resource("user", new RGWRESTMgr_User);
-    /* XXX dang part of this is RADOS specific */
     admin_resource->register_resource("bucket", new RGWRESTMgr_Bucket);
   
     /*Registering resource for /admin/metadata */
     admin_resource->register_resource("metadata", new RGWRESTMgr_Metadata);
-    /* XXX dang ifdef these RADOS ? */
+    /* XXX dang Must ifdef RADOS */
     admin_resource->register_resource("log", new RGWRESTMgr_Log);
+    /* XXX dang ifdef these RADOS ? */
     admin_resource->register_resource("config", new RGWRESTMgr_Config);
     admin_resource->register_resource("realm", new RGWRESTMgr_Realm);
     rest.register_resource(g_conf()->rgw_admin_entry, admin_resource);
