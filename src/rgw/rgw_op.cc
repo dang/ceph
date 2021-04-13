@@ -564,7 +564,7 @@ int rgw_build_bucket_policies(const DoutPrefixProvider *dpp, rgw::sal::Store* st
 			    &src_bucket, y);
     if (ret == 0) {
       string& zonegroup = src_bucket->get_info().zonegroup;
-      s->local_source = store->get_zone()->get_zonegroup().equals(zonegroup);
+      s->local_source = store->get_local_zone()->get_zonegroup().equals(zonegroup);
     }
   }
 
@@ -608,7 +608,7 @@ int rgw_build_bucket_policies(const DoutPrefixProvider *dpp, rgw::sal::Store* st
     s->bucket_owner = s->bucket_acl->get_owner();
 
     RGWZoneGroup zonegroup;
-    int r = store->get_zone()->get_zonegroup(s->bucket->get_info().zonegroup, zonegroup);
+    int r = store->get_local_zone()->get_zonegroup(s->bucket->get_info().zonegroup, zonegroup);
     if (!r) {
       if (!zonegroup.endpoints.empty()) {
 	s->zonegroup_endpoint = zonegroup.endpoints.front();
@@ -625,14 +625,14 @@ int rgw_build_bucket_policies(const DoutPrefixProvider *dpp, rgw::sal::Store* st
       ret = r;
     }
 
-    if (!store->get_zone()->get_zonegroup().equals(s->bucket->get_info().zonegroup)) {
+    if (!store->get_local_zone()->get_zonegroup().equals(s->bucket->get_info().zonegroup)) {
       ldpp_dout(dpp, 0) << "NOTICE: request for data in a different zonegroup ("
           << s->bucket->get_info().zonegroup << " != "
-          << store->get_zone()->get_zonegroup().get_id() << ")" << dendl;
+          << store->get_local_zone()->get_zonegroup().get_id() << ")" << dendl;
       /* we now need to make sure that the operation actually requires copy source, that is
        * it's a copy operation
        */
-      if (store->get_zone()->get_zonegroup().is_master_zonegroup() && s->system_request) {
+      if (store->get_local_zone()->get_zonegroup().is_master_zonegroup() && s->system_request) {
         /*If this is the master, don't redirect*/
       } else if (s->op_type == RGW_OP_GET_BUCKET_LOCATION ) {
         /* If op is get bucket location, don't redirect */
@@ -647,7 +647,7 @@ int rgw_build_bucket_policies(const DoutPrefixProvider *dpp, rgw::sal::Store* st
     s->dest_placement.storage_class = s->info.storage_class;
     s->dest_placement.inherit_from(s->bucket->get_placement_rule());
 
-    if (!store->get_zone()->get_params().valid_placement(s->dest_placement)) {
+    if (!store->get_local_zone()->get_params().valid_placement(s->dest_placement)) {
       ldpp_dout(dpp, 0) << "NOTICE: invalid dest placement: " << s->dest_placement.to_str() << dendl;
       return -EINVAL;
     }
@@ -713,7 +713,7 @@ int rgw_build_bucket_policies(const DoutPrefixProvider *dpp, rgw::sal::Store* st
     ret = -EACCES;
   }
 
-  bool success = store->get_zone()->get_redirect_endpoint(&s->redirect_zone_endpoint);
+  bool success = store->get_local_zone()->get_redirect_endpoint(&s->redirect_zone_endpoint);
   if (success) {
     ldpp_dout(dpp, 20) << "redirect_zone_endpoint=" << s->redirect_zone_endpoint << dendl;
   }
@@ -960,7 +960,7 @@ int RGWOp::verify_op_mask()
     return -EPERM;
   }
 
-  if (!s->system_request && (required_mask & RGW_OP_TYPE_MODIFY) && !store->get_zone()->is_writeable()) {
+  if (!s->system_request && (required_mask & RGW_OP_TYPE_MODIFY) && !store->get_local_zone()->is_writeable()) {
     ldpp_dout(this, 5) << "NOTICE: modify request to a read-only zone by a "
         "non-system user, permission denied"  << dendl;
     return -EPERM;
@@ -2334,7 +2334,7 @@ void RGWListBuckets::execute(optional_yield y)
     /* We need to have stats for all our policies - even if a given policy
      * isn't actually used in a given account. In such situation its usage
      * stats would be simply full of zeros. */
-    for (const auto& policy : store->get_zone()->get_zonegroup().placement_targets) {
+    for (const auto& policy : store->get_local_zone()->get_zonegroup().placement_targets) {
       policies_stats.emplace(policy.second.name,
                              decltype(policies_stats)::mapped_type());
     }
@@ -2475,7 +2475,7 @@ void RGWStatAccount::execute(optional_yield y)
       /* We need to have stats for all our policies - even if a given policy
        * isn't actually used in a given account. In such situation its usage
        * stats would be simply full of zeros. */
-      for (const auto& policy : store->get_zone()->get_zonegroup().placement_targets) {
+      for (const auto& policy : store->get_local_zone()->get_zonegroup().placement_targets) {
         policies_stats.emplace(policy.second.name,
                                decltype(policies_stats)::mapped_type());
       }
@@ -3055,7 +3055,7 @@ void RGWCreateBucket::execute(optional_yield y)
   buffer::list aclbl;
   buffer::list corsbl;
   string bucket_name = rgw_make_bucket_entry_name(s->bucket_tenant, s->bucket_name);
-  rgw_raw_obj obj(store->get_zone()->get_params().domain_root, bucket_name);
+  rgw_raw_obj obj(store->get_local_zone()->get_params().domain_root, bucket_name);
 
   op_ret = get_params(y);
   if (op_ret < 0)
@@ -3063,7 +3063,7 @@ void RGWCreateBucket::execute(optional_yield y)
 
   if (!relaxed_region_enforcement &&
       !location_constraint.empty() &&
-      !store->get_zone()->has_zonegroup_api(location_constraint)) {
+      !store->get_local_zone()->has_zonegroup_api(location_constraint)) {
       ldpp_dout(this, 0) << "location constraint (" << location_constraint << ")"
                        << " can't be found." << dendl;
       op_ret = -ERR_INVALID_LOCATION_CONSTRAINT;
@@ -3071,22 +3071,22 @@ void RGWCreateBucket::execute(optional_yield y)
       return;
   }
 
-  if (!relaxed_region_enforcement && !store->get_zone()->get_zonegroup().is_master_zonegroup() && !location_constraint.empty() &&
-      store->get_zone()->get_zonegroup().api_name != location_constraint) {
+  if (!relaxed_region_enforcement && !store->get_local_zone()->get_zonegroup().is_master_zonegroup() && !location_constraint.empty() &&
+      store->get_local_zone()->get_zonegroup().api_name != location_constraint) {
     ldpp_dout(this, 0) << "location constraint (" << location_constraint << ")"
-                     << " doesn't match zonegroup" << " (" << store->get_zone()->get_zonegroup().api_name << ")"
+                     << " doesn't match zonegroup" << " (" << store->get_local_zone()->get_zonegroup().api_name << ")"
                      << dendl;
     op_ret = -ERR_INVALID_LOCATION_CONSTRAINT;
     s->err.message = "The specified location-constraint is not valid";
     return;
   }
 
-  const auto& zonegroup = store->get_zone()->get_zonegroup();
+  const auto& zonegroup = store->get_local_zone()->get_zonegroup();
   if (!placement_rule.name.empty() &&
       !zonegroup.placement_targets.count(placement_rule.name)) {
     ldpp_dout(this, 0) << "placement target (" << placement_rule.name << ")"
                      << " doesn't exist in the placement targets of zonegroup"
-                     << " (" << store->get_zone()->get_zonegroup().api_name << ")" << dendl;
+                     << " (" << store->get_local_zone()->get_zonegroup().api_name << ")" << dendl;
     op_ret = -ERR_INVALID_LOCATION_CONSTRAINT;
     s->err.message = "The specified placement target does not exist";
     return;
@@ -3101,7 +3101,7 @@ void RGWCreateBucket::execute(optional_yield y)
 
   if (s->bucket_exists) {
     if (!s->system_request &&
-        store->get_zone()->get_zonegroup().get_id() != s->bucket->get_info().zonegroup) {
+        store->get_local_zone()->get_zonegroup().get_id() != s->bucket->get_info().zonegroup) {
       op_ret = -EEXIST;
       return;
     }
@@ -3117,10 +3117,10 @@ void RGWCreateBucket::execute(optional_yield y)
   if (s->system_request) {
     zonegroup_id = s->info.args.get(RGW_SYS_PARAM_PREFIX "zonegroup");
     if (zonegroup_id.empty()) {
-      zonegroup_id = store->get_zone()->get_zonegroup().get_id();
+      zonegroup_id = store->get_local_zone()->get_zonegroup().get_id();
     }
   } else {
-    zonegroup_id = store->get_zone()->get_zonegroup().get_id();
+    zonegroup_id = store->get_local_zone()->get_zonegroup().get_id();
   }
 
   /* Encode special metadata first as we're using std::map::emplace under
@@ -3864,7 +3864,7 @@ void RGWPutObj::execute(optional_yield y)
   // no filters by default
   DataProcessor *filter = processor.get();
 
-  const auto& compression_type = store->get_zone()->get_params().get_compression_type(*pdest_placement);
+  const auto& compression_type = store->get_local_zone()->get_params().get_compression_type(*pdest_placement);
   CompressorRef plugin;
   boost::optional<RGWPutObj_Compress> compressor;
 
@@ -4184,7 +4184,7 @@ void RGWPostObj::execute(optional_yield y)
     if (encrypt != nullptr) {
       filter = encrypt.get();
     } else {
-      const auto& compression_type = store->get_zone()->get_params().get_compression_type(
+      const auto& compression_type = store->get_local_zone()->get_params().get_compression_type(
           s->dest_placement);
       if (compression_type != "none") {
         plugin = Compressor::create(s->cct, compression_type);
@@ -6022,7 +6022,7 @@ void RGWCompleteMultipart::execute(optional_yield y)
         op_ret = -ERR_INVALID_PART;
         return;
       } else {
-        manifest.append(this, obj_part.manifest, store->get_zone());
+        manifest.append(this, obj_part.manifest, store->get_local_zone());
       }
 
       bool part_compressed = (obj_part.cs_info.compression_type != "none");
@@ -6878,7 +6878,7 @@ int RGWBulkUploadOp::handle_dir(const std::string_view path, optional_yield y)
   rgw_obj_key object_junk;
   std::tie(bucket_name, object_junk) =  *parse_path(path);
 
-  rgw_raw_obj obj(store->get_zone()->get_params().domain_root,
+  rgw_raw_obj obj(store->get_local_zone()->get_params().domain_root,
                   rgw_make_bucket_entry_name(s->bucket_tenant, bucket_name));
 
   /* we need to make sure we read bucket info, it's not read before for this
@@ -6908,7 +6908,7 @@ int RGWBulkUploadOp::handle_dir(const std::string_view path, optional_yield y)
   forward_req_info(s->cct, info, bucket_name);
 
   op_ret = store->create_bucket(this, s->user.get(), new_bucket,
-                                store->get_zone()->get_zonegroup().get_id(),
+                                store->get_local_zone()->get_zonegroup().get_id(),
                                 placement_rule, swift_ver_location,
                                 pquota_info, policy, attrs,
                                 out_info, ep_objv,
@@ -7026,7 +7026,7 @@ int RGWBulkUploadOp::handle_file(const std::string_view path,
   /* No filters by default. */
   DataProcessor *filter = &processor;
 
-  const auto& compression_type = store->get_zone()->get_params().get_compression_type(
+  const auto& compression_type = store->get_local_zone()->get_params().get_compression_type(
       dest_placement);
   CompressorRef plugin;
   boost::optional<RGWPutObj_Compress> compressor;

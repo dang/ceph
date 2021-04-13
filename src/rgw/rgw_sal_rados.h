@@ -335,8 +335,11 @@ class RadosBucket : public Bucket {
 class RadosZone : public Zone {
   protected:
     RadosStore* store;
+    RGWZone* zone{nullptr};
+    rgw_zone_id zone_id;
   public:
     RadosZone(RadosStore* _store) : store(_store) {}
+    RadosZone(RadosStore* _store, RGWZone* _zone) : store(_store), zone(_zone), zone_id(zone->id) {}
     ~RadosZone() = default;
 
     virtual const RGWZoneGroup& get_zonegroup() override;
@@ -396,7 +399,9 @@ class RadosStore : public Store {
 					  optional_yield y) override;
     virtual int defer_gc(const DoutPrefixProvider* dpp, RGWObjectCtx* rctx, Bucket* bucket, Object* obj,
 			 optional_yield y) override;
-    virtual Zone* get_zone() { return &zone; }
+    virtual Zone* get_local_zone() { return &zone; }
+    virtual int get_zone_by_name(const std::string& name, std::unique_ptr<Zone>* zone) override;
+    virtual int get_zone_by_id(const rgw_zone_id& id, std::unique_ptr<Zone>* zone) override;
     virtual std::string zone_unique_id(uint64_t unique_num) override;
     virtual std::string zone_unique_trans_id(const uint64_t unique_num) override;
     virtual int cluster_stat(RGWClusterStat& stats) override;
@@ -592,7 +597,7 @@ class RadosLuaScriptManager : public LuaScriptManager {
 public:
   RadosLuaScriptManager(RadosStore* _s) : store(_s)
   {
-    pool = store->get_zone()->get_params().log_pool;
+    pool = store->get_local_zone()->get_params().log_pool;
   }
   virtual ~RadosLuaScriptManager() = default;
 

@@ -820,7 +820,7 @@ int AsioFrontend::init_ssl()
       key_is_cert = true;
     }
 
-    ExpandMetaVar emv(env.store->get_zone());
+    ExpandMetaVar emv(env.store->get_local_zone());
 
     cert = emv.process_str(*cert);
     key = emv.process_str(*key);

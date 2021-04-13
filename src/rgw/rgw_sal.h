@@ -164,7 +164,9 @@ class Store {
 					  optional_yield y) = 0;
     virtual int defer_gc(const DoutPrefixProvider* dpp, RGWObjectCtx* rctx, Bucket* bucket, Object* obj,
 			 optional_yield y) = 0;
-    virtual Zone* get_zone() = 0;
+    virtual Zone* get_local_zone() = 0;
+    virtual int get_zone_by_name(const std::string& name, std::unique_ptr<Zone>* zone) = 0;
+    virtual int get_zone_by_id(const rgw_zone_id& id, std::unique_ptr<Zone>* zone) = 0;
     virtual std::string zone_unique_id(uint64_t unique_num) = 0;
     virtual std::string zone_unique_trans_id(const uint64_t unique_num) = 0;
     virtual int cluster_stat(RGWClusterStat& stats) = 0;

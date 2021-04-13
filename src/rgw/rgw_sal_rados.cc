@@ -893,6 +893,45 @@ int RadosStore::defer_gc(const DoutPrefixProvider* dpp, RGWObjectCtx* rctx, Buck
   return rados->defer_gc(dpp, rctx, bucket->get_info(), obj->get_obj(), y);
 }
 
+int RadosStore::get_zone_by_name(const std::string& name, std::unique_ptr<Zone>* zone)
+{
+  rgw_zone_id id;
+  RGWZone* rz;
+  Zone* z;
+
+  int r = svc()->zone->find_zone_id_by_name(name, &id);
+  if (r < 0)
+    return r;
+
+  r = svc()->zone->find_zone(id, &rz);
+  if (r < 0)
+    return r;
+
+  z = new RadosZone(this, rz);
+  if (!z)
+    return -ENOMEM;
+
+  zone->reset(z);
+  return 0;
+}
+
+int RadosStore::get_zone_by_id(const rgw_zone_id& id, std::unique_ptr<Zone>* zone)
+{
+  RGWZone* rz;
+  Zone* z;
+
+  int r = svc()->zone->find_zone(id, &rz);
+  if (r < 0)
+    return r;
+
+  z = new RadosZone(this, rz);
+  if (!z)
+    return -ENOMEM;
+
+  zone->reset(z);
+  return 0;
+}
+
 std::string RadosStore::zone_unique_id(uint64_t unique_num)
 {
   return svc()->zone_utils->unique_id(unique_num);
@@ -1104,7 +1143,7 @@ int RadosStore::get_roles(const DoutPrefixProvider *dpp,
 			  const std::string& tenant,
 			  vector<std::unique_ptr<RGWRole>>& roles)
 {
-  auto pool = get_zone()->get_params().roles_pool;
+  auto pool = get_local_zone()->get_params().roles_pool;
   std::string prefix;
 
   // List all roles if path prefix is empty
@@ -2031,6 +2070,7 @@ RadosWriter::~RadosWriter()
 
 const RGWZoneGroup& RadosZone::get_zonegroup()
 {
+  /* XXX dang Assume zone is in our zonegroup for now */
   return store->svc()->zone->get_zonegroup();
 }
 
@@ -2041,41 +2081,58 @@ int RadosZone::get_zonegroup(const std::string& id, RGWZoneGroup& zonegroup)
 
 const RGWZoneParams& RadosZone::get_params()
 {
+  /* XXX dang Assume zone has same params as us */
   return store->svc()->zone->get_zone_params();
 }
 
 const rgw_zone_id& RadosZone::get_id()
 {
+  if (zone) {
+    return zone_id;
+  }
   return store->svc()->zone->zone_id();
 }
 
 const RGWRealm& RadosZone::get_realm()
 {
+  /* XXX dang Assume zone has same realm as us */
   return store->svc()->zone->get_realm();
 }
 
 const std::string& RadosZone::get_name() const
 {
+  if (zone) {
+    return zone->name;
+  }
   return store->svc()->zone->zone_name();
 }
 
 bool RadosZone::is_writeable()
 {
+  if (zone) {
+    return !(zone->read_only);
+  }
   return store->svc()->zone->zone_is_writeable();
 }
 
 bool RadosZone::get_redirect_endpoint(std::string* endpoint)
 {
+  /* XXX dang Only return redircet for us */
+  if (zone) {
+    return false;
+  }
   return store->svc()->zone->get_redirect_zone_endpoint(endpoint);
 }
 
 bool RadosZone::has_zonegroup_api(const std::string& api) const
 {
+  /* XXX dang Assume zone has same APIs as us */
   return store->svc()->zone->has_zonegroup_api(api);
 }
 
 const std::string& RadosZone::get_current_period_id()
 {
+  /* XXX dang Assume zone has same period as us */
   return store->svc()->zone->get_current_period_id();
 }
 
@@ -2131,13 +2188,13 @@ int RadosOIDCProvider::store_url(const DoutPrefixProvider *dpp, const std::strin
   bufferlist bl;
   using ceph::encode;
   encode(*this, bl);
-  return rgw_put_system_obj(dpp, obj_ctx, store->get_zone()->get_params().oidc_pool, oid, bl, exclusive, nullptr, real_time(), y);
+  return rgw_put_system_obj(dpp, obj_ctx, store->get_local_zone()->get_params().oidc_pool, oid, bl, exclusive, nullptr, real_time(), y);
 }
 
 int RadosOIDCProvider::read_url(const DoutPrefixProvider *dpp, const std::string& url, const std::string& tenant)
 {
   auto obj_ctx = store->svc()->sysobj->init_obj_ctx();
-  auto& pool = store->get_zone()->get_params().oidc_pool;
+  auto& pool = store->get_local_zone()->get_params().oidc_pool;
   std::string oid = tenant + get_url_oid_prefix() + url;
   bufferlist bl;
 
@@ -2161,7 +2218,7 @@ int RadosOIDCProvider::read_url(const DoutPrefixProvider *dpp, const std::string
 
 int RadosOIDCProvider::delete_obj(const DoutPrefixProvider *dpp, optional_yield y)
 {
-  auto& pool = store->get_zone()->get_params().oidc_pool;
+  auto& pool = store->get_local_zone()->get_params().oidc_pool;
 
   std::string url, tenant;
   auto ret = get_tenant_url_from_arn(tenant, url);
@@ -2196,7 +2253,7 @@ int RadosRole::store_info(const DoutPrefixProvider *dpp, bool exclusive, optiona
   bufferlist bl;
   encode(*this, bl);
 
-  return rgw_put_system_obj(dpp, obj_ctx, store->get_zone()->get_params().roles_pool, oid, bl, exclusive, nullptr, real_time(), y);
+  return rgw_put_system_obj(dpp, obj_ctx, store->get_local_zone()->get_params().roles_pool, oid, bl, exclusive, nullptr, real_time(), y);
 }
 
 int RadosRole::store_name(const DoutPrefixProvider *dpp, bool exclusive, optional_yield y)
@@ -2211,7 +2268,7 @@ int RadosRole::store_name(const DoutPrefixProvider *dpp, bool exclusive, optiona
   using ceph::encode;
   encode(nameToId, bl);
 
-  return rgw_put_system_obj(dpp, obj_ctx, store->get_zone()->get_params().roles_pool, oid, bl, exclusive, nullptr, real_time(), y);
+  return rgw_put_system_obj(dpp, obj_ctx, store->get_local_zone()->get_params().roles_pool, oid, bl, exclusive, nullptr, real_time(), y);
 }
 
 int RadosRole::store_path(const DoutPrefixProvider *dpp, bool exclusive, optional_yield y)
@@ -2221,7 +2278,7 @@ int RadosRole::store_path(const DoutPrefixProvider *dpp, bool exclusive, optiona
 
   bufferlist bl;
 
-  return rgw_put_system_obj(dpp, obj_ctx, store->get_zone()->get_params().roles_pool, oid, bl, exclusive, nullptr, real_time(), y);
+  return rgw_put_system_obj(dpp, obj_ctx, store->get_local_zone()->get_params().roles_pool, oid, bl, exclusive, nullptr, real_time(), y);
 }
 
 int RadosRole::read_id(const DoutPrefixProvider *dpp, const std::string& role_name, const std::string& tenant, std::string& role_id, optional_yield y)
@@ -2230,7 +2287,7 @@ int RadosRole::read_id(const DoutPrefixProvider *dpp, const std::string& role_na
   std::string oid = tenant + get_names_oid_prefix() + role_name;
   bufferlist bl;
 
-  int ret = rgw_get_system_obj(obj_ctx, store->get_zone()->get_params().roles_pool, oid, bl, nullptr, nullptr, null_yield, dpp);
+  int ret = rgw_get_system_obj(obj_ctx, store->get_local_zone()->get_params().roles_pool, oid, bl, nullptr, nullptr, null_yield, dpp);
   if (ret < 0) {
     return ret;
   }
@@ -2254,7 +2311,7 @@ int RadosRole::read_name(const DoutPrefixProvider *dpp, optional_yield y)
   std::string oid = tenant + get_names_oid_prefix() + name;
   bufferlist bl;
 
-  int ret = rgw_get_system_obj(obj_ctx, store->get_zone()->get_params().roles_pool, oid, bl, nullptr, nullptr, null_yield, dpp);
+  int ret = rgw_get_system_obj(obj_ctx, store->get_local_zone()->get_params().roles_pool, oid, bl, nullptr, nullptr, null_yield, dpp);
   if (ret < 0) {
     ldpp_dout(dpp, 0) << "ERROR: failed reading role name from Role pool: " << name <<
       ": " << cpp_strerror(-ret) << dendl;
@@ -2280,7 +2337,7 @@ int RadosRole::read_info(const DoutPrefixProvider *dpp, optional_yield y)
   std::string oid = get_info_oid_prefix() + id;
   bufferlist bl;
 
-  int ret = rgw_get_system_obj(obj_ctx, store->get_zone()->get_params().roles_pool, oid, bl, nullptr, nullptr, null_yield, dpp);
+  int ret = rgw_get_system_obj(obj_ctx, store->get_local_zone()->get_params().roles_pool, oid, bl, nullptr, nullptr, null_yield, dpp);
   if (ret < 0) {
     ldpp_dout(dpp, 0) << "ERROR: failed reading role info from Role pool: " << id << ": " << cpp_strerror(-ret) << dendl;
     return ret;
@@ -2341,7 +2398,7 @@ int RadosRole::create(const DoutPrefixProvider *dpp, bool exclusive, optional_yi
   sprintf(buf + strlen(buf),".%dZ",(int)tv.tv_usec/1000);
   creation_date.assign(buf, strlen(buf));
 
-  auto& pool = store->get_zone()->get_params().roles_pool;
+  auto& pool = store->get_local_zone()->get_params().roles_pool;
   ret = store_info(dpp, exclusive, y);
   if (ret < 0) {
     ldpp_dout(dpp, 0) << "ERROR:  storing role info in Role pool: "
@@ -2389,7 +2446,7 @@ int RadosRole::create(const DoutPrefixProvider *dpp, bool exclusive, optional_yi
 
 int RadosRole::delete_obj(const DoutPrefixProvider *dpp, optional_yield y)
 {
-  auto& pool = store->get_zone()->get_params().roles_pool;
+  auto& pool = store->get_local_zone()->get_params().roles_pool;
 
   int ret = read_name(dpp, y);
   if (ret < 0) {

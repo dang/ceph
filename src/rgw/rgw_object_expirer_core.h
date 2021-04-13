@@ -103,7 +103,7 @@ protected:
 public:
   explicit RGWObjectExpirer(rgw::sal::Store* _store)
     : store(_store),
-      exp_store(_store->ctx(), static_cast<rgw::sal::RadosStore*>(store)->svc()->rados, store->get_zone()),
+      exp_store(_store->ctx(), static_cast<rgw::sal::RadosStore*>(store)->svc()->rados, store->get_local_zone()),
       worker(NULL) {
   }
   ~RGWObjectExpirer() {

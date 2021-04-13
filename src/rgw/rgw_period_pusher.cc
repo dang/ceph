@@ -167,7 +167,7 @@ RGWPeriodPusher::RGWPeriodPusher(const DoutPrefixProvider *dpp, rgw::sal::Store*
 				 optional_yield y)
   : cct(store->ctx()), store(store)
 {
-  const auto& realm = store->get_zone()->get_realm();
+  const auto& realm = store->get_local_zone()->get_realm();
   auto& realm_id = realm.get_id();
   if (realm_id.empty()) // no realm configuration
     return;
@@ -230,7 +230,7 @@ void RGWPeriodPusher::handle_notify(RGWZonesNeedPeriod&& period)
 
   // find our zonegroup in the new period
   auto& zonegroups = period.get_map().zonegroups;
-  auto i = zonegroups.find(store->get_zone()->get_zonegroup().get_id());
+  auto i = zonegroups.find(store->get_local_zone()->get_zonegroup().get_id());
   if (i == zonegroups.end()) {
     lderr(cct) << "The new period does not contain my zonegroup!" << dendl;
     return;
@@ -238,7 +238,7 @@ void RGWPeriodPusher::handle_notify(RGWZonesNeedPeriod&& period)
   auto& my_zonegroup = i->second;
 
   // if we're not a master zone, we're not responsible for pushing any updates
-  if (my_zonegroup.master_zone != store->get_zone()->get_params().get_id())
+  if (my_zonegroup.master_zone != store->get_local_zone()->get_params().get_id())
     return;
 
   // construct a map of the zones that need this period. the map uses the same
@@ -247,11 +247,11 @@ void RGWPeriodPusher::handle_notify(RGWZonesNeedPeriod&& period)
   auto hint = conns.end();
 
   // are we the master zonegroup in this period?
-  if (period.get_map().master_zonegroup == store->get_zone()->get_zonegroup().get_id()) {
+  if (period.get_map().master_zonegroup == store->get_local_zone()->get_zonegroup().get_id()) {
     // update other zonegroup endpoints
     for (auto& zg : zonegroups) {
       auto& zonegroup = zg.second;
-      if (zonegroup.get_id() == store->get_zone()->get_zonegroup().get_id())
+      if (zonegroup.get_id() == store->get_local_zone()->get_zonegroup().get_id())
         continue;
       if (zonegroup.endpoints.empty())
         continue;
@@ -266,7 +266,7 @@ void RGWPeriodPusher::handle_notify(RGWZonesNeedPeriod&& period)
   // update other zone endpoints
   for (auto& z : my_zonegroup.zones) {
     auto& zone = z.second;
-    if (zone.id == store->get_zone()->get_params().get_id())
+    if (zone.id == store->get_local_zone()->get_params().get_id())
       continue;
     if (zone.endpoints.empty())
       continue;

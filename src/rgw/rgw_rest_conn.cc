@@ -39,8 +39,8 @@ RGWRESTConn::RGWRESTConn(CephContext *_cct, rgw::sal::Store* store,
     host_style(_host_style)
 {
   if (store) {
-    key = store->get_zone()->get_params().system_key;
-    self_zone_group = store->get_zone()->get_zonegroup().get_id();
+    key = store->get_local_zone()->get_params().system_key;
+    self_zone_group = store->get_local_zone()->get_zonegroup().get_id();
   }
 }
 
@@ -76,7 +76,7 @@ RGWRESTConn::RGWRESTConn(CephContext *_cct, rgw::sal::Store* store,
     host_style(_host_style)
 {
   if (store) {
-    self_zone_group = store->get_zone()->get_zonegroup().get_id();
+    self_zone_group = store->get_local_zone()->get_zonegroup().get_id();
   }
 }
 
