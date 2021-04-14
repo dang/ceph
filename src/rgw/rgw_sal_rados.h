@@ -67,6 +67,7 @@ class RadosUser : public User {
     virtual int load_user(const DoutPrefixProvider* dpp, optional_yield y) override;
     virtual int store_user(const DoutPrefixProvider* dpp, optional_yield y, bool exclusive, RGWUserInfo* old_info = nullptr) override;
     virtual int remove_user(const DoutPrefixProvider* dpp, optional_yield y) override;
+    virtual int verify_mfa(const DoutPrefixProvider *dpp, optional_yield y, const string& mfa_str, bool *verified) override;
 
     friend class RadosBucket;
 };

@@ -291,6 +291,7 @@ class User {
     virtual int load_user(const DoutPrefixProvider* dpp, optional_yield y) = 0;
     virtual int store_user(const DoutPrefixProvider* dpp, optional_yield y, bool exclusive, RGWUserInfo* old_info = nullptr) = 0;
     virtual int remove_user(const DoutPrefixProvider* dpp, optional_yield y) = 0;
+    virtual int verify_mfa(const DoutPrefixProvider *dpp, optional_yield y, const string& mfa_str, bool *verified) = 0;
 
     /* dang temporary; will be removed when User is complete */
     RGWUserInfo& get_info() { return info; }
