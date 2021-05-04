@@ -7,10 +7,7 @@
 #include <boost/container/flat_map.hpp>
 #include "rgw_common.h"
 #include "common/OutputDataSocket.h"
-
-namespace rgw { namespace sal {
-  class Store;
-} }
+#include "rgw_sal_forward.h"
 
 struct rgw_log_entry {
 

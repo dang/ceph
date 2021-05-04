@@ -4,7 +4,7 @@
 /*
  * Ceph - scalable distributed file system
  *
- * Copyright (C) 2019 Red Hat, Inc.
+ * Copyright (C) 2021 Red Hat, Inc.
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@
 #include "rgw_user.h"
 #include "rgw_notify_event_type.h"
 #include "rgw_putobj.h"
+#include "rgw_sal_forward.h"
 
 class RGWGetDataCB;
 struct RGWObjState;
@@ -94,20 +95,6 @@ public:
 namespace rgw { namespace sal {
 
 #define RGW_SAL_VERSION 1
-
-class User;
-class Bucket;
-class Object;
-class BucketList;
-struct MPSerializer;
-class Lifecycle;
-class Notification;
-class GCChain;
-class Writer;
-class Zone;
-class LuaScriptManager;
-class RGWOIDCProvider;
-class RGWRole;
 
 enum AttrsMod {
   ATTRSMOD_NONE    = 0,
