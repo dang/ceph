@@ -9,7 +9,7 @@
 #define dout_subsys ceph_subsys_rgw
 
 
-RGWSI_Meta::RGWSI_Meta(CephContext *cct) : RGWServiceInstance(cct) {
+RGWSI_Meta::RGWSI_Meta(rgw::sal::Store* store, CephContext *cct) : RGWServiceInstance(store, cct) {
 }
 
 RGWSI_Meta::~RGWSI_Meta() {}

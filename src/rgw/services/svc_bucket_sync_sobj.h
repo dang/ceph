@@ -90,7 +90,7 @@ public:
     RGWSI_Bucket_SObj *bucket_sobj{nullptr};
   } svc;
 
-  RGWSI_Bucket_Sync_SObj(CephContext *cct);
+  RGWSI_Bucket_Sync_SObj(rgw::sal::Store* store, CephContext *cct);
   ~RGWSI_Bucket_Sync_SObj();
 
   void init(RGWSI_Zone *_zone_svc,

@@ -35,7 +35,7 @@ class RGWSI_Meta : public RGWServiceInstance
   vector<unique_ptr<RGWSI_MetaBackend_Handler> > be_handlers;
 
 public:
-  RGWSI_Meta(CephContext *cct);
+  RGWSI_Meta(rgw::sal::Store* store, CephContext *cct);
   ~RGWSI_Meta();
 
   void init(RGWSI_SysObj *_sysobj_svc,

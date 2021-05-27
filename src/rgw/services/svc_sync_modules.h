@@ -20,7 +20,7 @@ class RGWSI_SyncModules : public RGWServiceInstance
   } svc;
 
 public:
-  RGWSI_SyncModules(CephContext *cct): RGWServiceInstance(cct) {}
+  RGWSI_SyncModules(rgw::sal::Store* store, CephContext *cct): RGWServiceInstance(store, cct) {}
   ~RGWSI_SyncModules();
 
   RGWSyncModulesManager *get_manager() {

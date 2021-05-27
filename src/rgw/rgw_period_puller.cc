@@ -14,8 +14,9 @@
 #undef dout_prefix
 #define dout_prefix (*_dout << "rgw period puller: ")
 
-RGWPeriodPuller::RGWPeriodPuller(RGWSI_Zone *zone_svc, RGWSI_SysObj *sysobj_svc)
+RGWPeriodPuller::RGWPeriodPuller(rgw::sal::Store* _store, RGWSI_Zone *zone_svc, RGWSI_SysObj *sysobj_svc)
 {
+  store = _store;
   cct = zone_svc->ctx();
   svc.zone = zone_svc;
   svc.sysobj = sysobj_svc;
@@ -70,7 +71,7 @@ int RGWPeriodPuller::pull(const DoutPrefixProvider *dpp, const std::string& peri
   // try to read the period from rados
   period.set_id(period_id);
   period.set_epoch(0);
-  int r = period.init(dpp, cct, svc.sysobj, y);
+  int r = period.init(dpp, cct, store, y);
   if (r < 0) {
     if (svc.zone->is_meta_master()) {
       // can't pull if we're the master

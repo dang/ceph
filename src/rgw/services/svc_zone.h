@@ -28,6 +28,7 @@ class RGWSI_Zone : public RGWServiceInstance
 {
   friend struct RGWServices_Def;
 
+  rgw::sal::Store* store{nullptr};
   RGWSI_SysObj *sysobj_svc{nullptr};
   RGWSI_RADOS *rados_svc{nullptr};
   RGWSI_SyncModules *sync_modules_svc{nullptr};
@@ -57,7 +58,8 @@ class RGWSI_Zone : public RGWServiceInstance
 
   std::unique_ptr<rgw_sync_policy_info> sync_policy;
 
-  void init(RGWSI_SysObj *_sysobj_svc,
+  void init(rgw::sal::Store* _store,
+	    RGWSI_SysObj *_sysobj_svc,
 	    RGWSI_RADOS *_rados_svc,
 	    RGWSI_SyncModules *_sync_modules_svc,
 	    RGWSI_Bucket_Sync *_bucket_sync_svc);
@@ -71,7 +73,7 @@ class RGWSI_Zone : public RGWServiceInstance
 
   int update_placement_map(const DoutPrefixProvider *dpp, optional_yield y);
 public:
-  RGWSI_Zone(CephContext *cct);
+  RGWSI_Zone(rgw::sal::Store* store, CephContext *cct);
   ~RGWSI_Zone();
 
   const RGWZoneParams& get_zone_params() const;

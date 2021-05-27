@@ -31,7 +31,7 @@ public:
     RGWSI_BucketIndex_RADOS *bi{nullptr};
   } svc;
 
-  RGWSI_BILog_RADOS(CephContext *cct);
+  RGWSI_BILog_RADOS(rgw::sal::Store* store, CephContext *cct);
 
   void init(RGWSI_BucketIndex_RADOS *bi_rados_svc);
 

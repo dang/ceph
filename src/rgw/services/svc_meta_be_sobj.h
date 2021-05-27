@@ -113,7 +113,7 @@ public:
     void init(RGWSI_MetaBackend_Handler *h) override;
   };
 
-  RGWSI_MetaBackend_SObj(CephContext *cct);
+  RGWSI_MetaBackend_SObj(rgw::sal::Store* store, CephContext *cct);
   virtual ~RGWSI_MetaBackend_SObj();
 
   RGWSI_MetaBackend::Type get_type() {

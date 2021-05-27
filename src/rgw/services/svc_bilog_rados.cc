@@ -9,7 +9,7 @@
 
 #define dout_subsys ceph_subsys_rgw
 
-RGWSI_BILog_RADOS::RGWSI_BILog_RADOS(CephContext *cct) : RGWServiceInstance(cct)
+RGWSI_BILog_RADOS::RGWSI_BILog_RADOS(rgw::sal::Store* store, CephContext *cct) : RGWServiceInstance(store, cct)
 {
 }
 

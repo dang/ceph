@@ -73,7 +73,7 @@ void RGWOp_Period_Get::execute(optional_yield y)
   period.set_id(period_id);
   period.set_epoch(epoch);
 
-  op_ret = period.init(this, store->ctx(), static_cast<rgw::sal::RadosStore*>(store)->svc()->sysobj, realm_id, y, realm_name);
+  op_ret = period.init(this, store->ctx(), store, realm_id, y, realm_name);
   if (op_ret < 0)
     ldpp_dout(this, 5) << "failed to read period" << dendl;
 }
@@ -97,7 +97,7 @@ void RGWOp_Period_Post::execute(optional_yield y)
   auto cct = store->ctx();
 
   // initialize the period without reading from rados
-  period.init(this, cct, static_cast<rgw::sal::RadosStore*>(store)->svc()->sysobj, y, false);
+  period.init(this, cct, store, y, false);
 
   // decode the period from input
   const auto max_size = cct->_conf->rgw_max_put_param_size;
@@ -119,8 +119,8 @@ void RGWOp_Period_Post::execute(optional_yield y)
   // load the realm and current period from rados; there may be a more recent
   // period that we haven't restarted with yet. we also don't want to modify
   // the objects in use by RGWRados
-  RGWRealm realm(period.get_realm());
-  op_ret = realm.init(this, cct, static_cast<rgw::sal::RadosStore*>(store)->svc()->sysobj, y);
+  RGWRealm realm(store, period.get_realm());
+  op_ret = realm.init(this, cct, store, y);
   if (op_ret < 0) {
     ldpp_dout(this, -1) << "failed to read current realm: "
         << cpp_strerror(-op_ret) << dendl;
@@ -128,7 +128,7 @@ void RGWOp_Period_Post::execute(optional_yield y)
   }
 
   RGWPeriod current_period;
-  op_ret = current_period.init(this, cct, static_cast<rgw::sal::RadosStore*>(store)->svc()->sysobj, realm.get_id(), y);
+  op_ret = current_period.init(this, cct, store, realm.get_id(), y);
   if (op_ret < 0) {
     ldpp_dout(this, -1) << "failed to read current period: "
         << cpp_strerror(-op_ret) << dendl;
@@ -280,8 +280,8 @@ void RGWOp_Realm_Get::execute(optional_yield y)
   RESTArgs::get_string(s, "name", name, &name);
 
   // read realm
-  realm.reset(new RGWRealm(id, name));
-  op_ret = realm->init(this, g_ceph_context, static_cast<rgw::sal::RadosStore*>(store)->svc()->sysobj, y);
+  realm.reset(new RGWRealm(store, id, name));
+  op_ret = realm->init(this, g_ceph_context, store, y);
   if (op_ret < 0)
     ldpp_dout(this, -1) << "failed to read realm id=" << id
         << " name=" << name << dendl;
@@ -322,7 +322,7 @@ void RGWOp_Realm_List::execute(optional_yield y)
 {
   {
     // read default realm
-    RGWRealm realm(store->ctx(), static_cast<rgw::sal::RadosStore*>(store)->svc()->sysobj);
+    RGWRealm realm(store, store->ctx());
     [[maybe_unused]] int ret = realm.read_default_id(this, default_id, y);
   }
   op_ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->zone->list_realms(this, realms);

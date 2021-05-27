@@ -43,7 +43,7 @@ class RGWSI_Cls : public RGWServiceInstance
     }
 
   public:
-    ClsSubService(CephContext *cct) : RGWServiceInstance(cct) {}
+    ClsSubService(rgw::sal::Store* store, CephContext *cct) : RGWServiceInstance(store, cct) {}
   };
 
 public:
@@ -56,7 +56,7 @@ public:
 			   const ceph::real_time& mtime);
 
   public:
-    MFA(CephContext *cct): ClsSubService(cct) {}
+    MFA(rgw::sal::Store* store, CephContext *cct): ClsSubService(store, cct) {}
 
     string get_mfa_oid(const rgw_user& user) {
       return string("user:") + user.to_str();
@@ -83,7 +83,7 @@ public:
   class TimeLog : public ClsSubService {
     int init_obj(const DoutPrefixProvider *dpp, const string& oid, RGWSI_RADOS::Obj& obj);
   public:
-    TimeLog(CephContext *cct): ClsSubService(cct) {}
+    TimeLog(rgw::sal::Store* store, CephContext *cct): ClsSubService(store, cct) {}
 
     void prepare_entry(cls_log_entry& entry,
                        const real_time& ut,
@@ -134,9 +134,9 @@ public:
   class Lock : public ClsSubService {
     int init_obj(const string& oid, RGWSI_RADOS::Obj& obj);
     public:
-    Lock(CephContext *cct): ClsSubService(cct) {}
+    Lock(rgw::sal::Store* store, CephContext *cct): ClsSubService(store, cct) {}
     int lock_exclusive(const DoutPrefixProvider *dpp,
-                       const rgw_pool& pool,
+		       const rgw_pool& pool,
                        const string& oid,
                        timespan& duration,
                        string& zone_id,
@@ -150,7 +150,7 @@ public:
                std::optional<string> lock_name = std::nullopt);
   } lock;
 
-  RGWSI_Cls(CephContext *cct): RGWServiceInstance(cct), mfa(cct), timelog(cct), lock(cct) {}
+  RGWSI_Cls(rgw::sal::Store* store, CephContext *cct): RGWServiceInstance(store, cct), mfa(store, cct), timelog(store, cct), lock(store, cct) {}
 
   void init(RGWSI_Zone *_zone_svc, RGWSI_RADOS *_rados_svc) {
     rados_svc = _rados_svc;

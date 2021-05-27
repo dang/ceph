@@ -12,6 +12,7 @@
 #include "common/async/yield_context.h"
 
 #include "rgw/rgw_common.h"
+#include "rgw/rgw_sal_forward.h"
 
 struct RGWServices_Def;
 
@@ -20,6 +21,7 @@ class RGWServiceInstance
   friend struct RGWServices_Def;
 
 protected:
+  rgw::sal::Store* store;
   CephContext *cct;
 
   enum StartState {
@@ -33,7 +35,7 @@ protected:
     return 0;
   }
 public:
-  RGWServiceInstance(CephContext *_cct) : cct(_cct) {}
+  RGWServiceInstance(rgw::sal::Store* _store, CephContext *_cct) : store(_store), cct(_cct) {}
   virtual ~RGWServiceInstance() {}
 
   int start(optional_yield y, const DoutPrefixProvider *dpp);
@@ -108,7 +110,7 @@ struct RGWServices_Def
   RGWServices_Def();
   ~RGWServices_Def();
 
-  int init(CephContext *cct, bool have_cache, bool raw_storage, bool run_sync, optional_yield y, const DoutPrefixProvider *dpp);
+  int init(rgw::sal::Store* store, CephContext *cct, bool have_cache, bool raw_storage, bool run_sync, optional_yield y, const DoutPrefixProvider *dpp);
   void shutdown();
 };
 
@@ -147,14 +149,14 @@ struct RGWServices
   RGWSI_SysObj_Core *core{nullptr};
   RGWSI_User *user{nullptr};
 
-  int do_init(CephContext *cct, bool have_cache, bool raw_storage, bool run_sync, optional_yield y, const DoutPrefixProvider *dpp);
+  int do_init(rgw::sal::Store* store, CephContext *cct, bool have_cache, bool raw_storage, bool run_sync, optional_yield y, const DoutPrefixProvider *dpp);
 
-  int init(CephContext *cct, bool have_cache, bool run_sync, optional_yield y, const DoutPrefixProvider *dpp) {
-    return do_init(cct, have_cache, false, run_sync, y, dpp);
+  int init(rgw::sal::Store* store, CephContext *cct, bool have_cache, bool run_sync, optional_yield y, const DoutPrefixProvider *dpp) {
+    return do_init(store, cct, have_cache, false, run_sync, y, dpp);
   }
 
-  int init_raw(CephContext *cct, bool have_cache, optional_yield y, const DoutPrefixProvider *dpp) {
-    return do_init(cct, have_cache, true, false, y, dpp);
+  int init_raw(rgw::sal::Store* store, CephContext *cct, bool have_cache, optional_yield y, const DoutPrefixProvider *dpp) {
+    return do_init(store, cct, have_cache, true, false, y, dpp);
   }
   void shutdown() {
     _svc.shutdown();

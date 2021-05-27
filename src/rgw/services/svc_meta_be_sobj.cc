@@ -12,7 +12,7 @@
 #define dout_subsys ceph_subsys_rgw
 
 
-RGWSI_MetaBackend_SObj::RGWSI_MetaBackend_SObj(CephContext *cct) : RGWSI_MetaBackend(cct) {
+RGWSI_MetaBackend_SObj::RGWSI_MetaBackend_SObj(rgw::sal::Store* store, CephContext *cct) : RGWSI_MetaBackend(store, cct) {
 }
 
 RGWSI_MetaBackend_SObj::~RGWSI_MetaBackend_SObj() {

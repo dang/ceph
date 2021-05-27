@@ -29,7 +29,7 @@ class RGWSI_ZoneUtils : public RGWServiceInstance
   void init_unique_trans_id_deps();
 
 public:
-  RGWSI_ZoneUtils(CephContext *cct): RGWServiceInstance(cct) {}
+  RGWSI_ZoneUtils(rgw::sal::Store* store, CephContext *cct): RGWServiceInstance(store, cct) {}
 
   string gen_host_id();
   string unique_id(uint64_t unique_num);

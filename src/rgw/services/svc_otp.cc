@@ -44,7 +44,7 @@ public:
   }
 };
 
-RGWSI_OTP::RGWSI_OTP(CephContext *cct): RGWServiceInstance(cct) {
+RGWSI_OTP::RGWSI_OTP(rgw::sal::Store* store, CephContext *cct): RGWServiceInstance(store, cct) {
 }
 
 RGWSI_OTP::~RGWSI_OTP() {

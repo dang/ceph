@@ -28,7 +28,7 @@ using RGWBucketSyncPolicyHandlerRef = std::shared_ptr<RGWBucketSyncPolicyHandler
 class RGWSI_Bucket_Sync : public RGWServiceInstance
 {
 public:
-  RGWSI_Bucket_Sync(CephContext *cct) : RGWServiceInstance(cct) {}
+  RGWSI_Bucket_Sync(rgw::sal::Store* store, CephContext *cct) : RGWServiceInstance(store, cct) {}
 
   virtual int get_policy_handler(RGWSI_Bucket_X_Ctx& ctx,
                                  std::optional<rgw_zone_id> zone,

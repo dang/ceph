@@ -108,7 +108,7 @@ public:
     RGWSI_SyncModules *sync_modules{nullptr};
   } svc;
 
-  RGWSI_User_RADOS(CephContext *cct);
+  RGWSI_User_RADOS(rgw::sal::Store* store, CephContext *cct);
   ~RGWSI_User_RADOS();
 
   void init(RGWSI_RADOS *_rados_svc,

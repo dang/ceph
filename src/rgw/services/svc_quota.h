@@ -11,7 +11,7 @@ class RGWSI_Quota : public RGWServiceInstance
   RGWSI_Zone *zone_svc{nullptr};
 
 public:
-  RGWSI_Quota(CephContext *cct): RGWServiceInstance(cct) {}
+  RGWSI_Quota(rgw::sal::Store* store, CephContext *cct): RGWServiceInstance(store, cct) {}
 
   void init(RGWSI_Zone *_zone_svc) {
     zone_svc = _zone_svc;

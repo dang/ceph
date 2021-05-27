@@ -15,7 +15,7 @@
 
 static string dir_oid_prefix = ".dir.";
 
-RGWSI_BucketIndex_RADOS::RGWSI_BucketIndex_RADOS(CephContext *cct) : RGWSI_BucketIndex(cct)
+RGWSI_BucketIndex_RADOS::RGWSI_BucketIndex_RADOS(rgw::sal::Store* store, CephContext *cct) : RGWSI_BucketIndex(store, cct)
 {
 }
 

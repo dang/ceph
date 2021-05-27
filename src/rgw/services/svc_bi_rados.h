@@ -74,7 +74,7 @@ public:
     RGWDataChangesLog *datalog_rados{nullptr};
   } svc;
 
-  RGWSI_BucketIndex_RADOS(CephContext *cct);
+  RGWSI_BucketIndex_RADOS(rgw::sal::Store* store, CephContext *cct);
 
   void init(RGWSI_Zone *zone_svc,
             RGWSI_RADOS *rados_svc,

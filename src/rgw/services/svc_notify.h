@@ -84,7 +84,7 @@ private:
 
   void schedule_context(Context *c);
 public:
-  RGWSI_Notify(CephContext *cct): RGWServiceInstance(cct) {}
+  RGWSI_Notify(rgw::sal::Store* store, CephContext *cct): RGWServiceInstance(store, cct) {}
   ~RGWSI_Notify();
 
   class CB {

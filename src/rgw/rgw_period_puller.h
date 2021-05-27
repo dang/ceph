@@ -7,10 +7,12 @@
 #include "rgw_period_history.h"
 #include "include/common_fwd.h"
 #include "rgw/services/svc_sys_obj.h"
+#include "rgw/rgw_sal_forward.h"
 
 class RGWPeriod;
 
 class RGWPeriodPuller : public RGWPeriodHistory::Puller {
+  rgw::sal::Store* store;
   CephContext *cct;
 
   struct {
@@ -19,7 +21,7 @@ class RGWPeriodPuller : public RGWPeriodHistory::Puller {
   } svc;
 
  public:
-  explicit RGWPeriodPuller(RGWSI_Zone *zone_svc, RGWSI_SysObj *sysobj_svc);
+  explicit RGWPeriodPuller(rgw::sal::Store* _store, RGWSI_Zone *zone_svc, RGWSI_SysObj *sysobj_svc);
 
   int pull(const DoutPrefixProvider *dpp, const std::string& period_id, RGWPeriod& period, optional_yield y) override;
 };

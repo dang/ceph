@@ -150,7 +150,7 @@ protected:
            const DoutPrefixProvider *dpp);
 
 public:
-  RGWSI_SysObj_Core(CephContext *cct): RGWServiceInstance(cct) {}
+  RGWSI_SysObj_Core(rgw::sal::Store* store, CephContext *cct): RGWServiceInstance(store, cct) {}
 
   RGWSI_Zone *get_zone_svc() {
     return zone_svc;

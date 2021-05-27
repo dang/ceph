@@ -43,38 +43,39 @@ RGWServices_Def::~RGWServices_Def()
   shutdown();
 }
 
-int RGWServices_Def::init(CephContext *cct,
+int RGWServices_Def::init(rgw::sal::Store* store,
+			  CephContext *cct,
 			  bool have_cache,
                           bool raw,
 			  bool run_sync,
 			  optional_yield y,
                           const DoutPrefixProvider *dpp)
 {
-  finisher = std::make_unique<RGWSI_Finisher>(cct);
-  bucket_sobj = std::make_unique<RGWSI_Bucket_SObj>(cct);
-  bucket_sync_sobj = std::make_unique<RGWSI_Bucket_Sync_SObj>(cct);
-  bi_rados = std::make_unique<RGWSI_BucketIndex_RADOS>(cct);
-  bilog_rados = std::make_unique<RGWSI_BILog_RADOS>(cct);
-  cls = std::make_unique<RGWSI_Cls>(cct);
-  config_key_rados = std::make_unique<RGWSI_ConfigKey_RADOS>(cct);
+  finisher = std::make_unique<RGWSI_Finisher>(store, cct);
+  bucket_sobj = std::make_unique<RGWSI_Bucket_SObj>(store, cct);
+  bucket_sync_sobj = std::make_unique<RGWSI_Bucket_Sync_SObj>(store, cct);
+  bi_rados = std::make_unique<RGWSI_BucketIndex_RADOS>(store, cct);
+  bilog_rados = std::make_unique<RGWSI_BILog_RADOS>(store, cct);
+  cls = std::make_unique<RGWSI_Cls>(store, cct);
+  config_key_rados = std::make_unique<RGWSI_ConfigKey_RADOS>(store, cct);
   datalog_rados = std::make_unique<RGWDataChangesLog>(cct);
-  mdlog = std::make_unique<RGWSI_MDLog>(cct, run_sync);
-  meta = std::make_unique<RGWSI_Meta>(cct);
-  meta_be_sobj = std::make_unique<RGWSI_MetaBackend_SObj>(cct);
-  meta_be_otp = std::make_unique<RGWSI_MetaBackend_OTP>(cct);
-  notify = std::make_unique<RGWSI_Notify>(cct);
-  otp = std::make_unique<RGWSI_OTP>(cct);
-  rados = std::make_unique<RGWSI_RADOS>(cct);
-  zone = std::make_unique<RGWSI_Zone>(cct);
-  zone_utils = std::make_unique<RGWSI_ZoneUtils>(cct);
-  quota = std::make_unique<RGWSI_Quota>(cct);
-  sync_modules = std::make_unique<RGWSI_SyncModules>(cct);
-  sysobj = std::make_unique<RGWSI_SysObj>(cct);
-  sysobj_core = std::make_unique<RGWSI_SysObj_Core>(cct);
-  user_rados = std::make_unique<RGWSI_User_RADOS>(cct);
+  mdlog = std::make_unique<RGWSI_MDLog>(store, cct, run_sync);
+  meta = std::make_unique<RGWSI_Meta>(store, cct);
+  meta_be_sobj = std::make_unique<RGWSI_MetaBackend_SObj>(store, cct);
+  meta_be_otp = std::make_unique<RGWSI_MetaBackend_OTP>(store, cct);
+  notify = std::make_unique<RGWSI_Notify>(store, cct);
+  otp = std::make_unique<RGWSI_OTP>(store, cct);
+  rados = std::make_unique<RGWSI_RADOS>(store, cct);
+  zone = std::make_unique<RGWSI_Zone>(store, cct);
+  zone_utils = std::make_unique<RGWSI_ZoneUtils>(store, cct);
+  quota = std::make_unique<RGWSI_Quota>(store, cct);
+  sync_modules = std::make_unique<RGWSI_SyncModules>(store, cct);
+  sysobj = std::make_unique<RGWSI_SysObj>(store, cct);
+  sysobj_core = std::make_unique<RGWSI_SysObj_Core>(store, cct);
+  user_rados = std::make_unique<RGWSI_User_RADOS>(store, cct);
 
   if (have_cache) {
-    sysobj_cache = std::make_unique<RGWSI_SysObj_Cache>(dpp, cct);
+    sysobj_cache = std::make_unique<RGWSI_SysObj_Cache>(dpp, store, cct);
   }
 
   vector<RGWSI_MetaBackend *> meta_bes{meta_be_sobj.get(), meta_be_otp.get()};
@@ -98,7 +99,7 @@ int RGWServices_Def::init(CephContext *cct,
   notify->init(zone.get(), rados.get(), finisher.get());
   otp->init(zone.get(), meta.get(), meta_be_otp.get());
   rados->init();
-  zone->init(sysobj.get(), rados.get(), sync_modules.get(), bucket_sync_sobj.get());
+  zone->init(store, sysobj.get(), rados.get(), sync_modules.get(), bucket_sync_sobj.get());
   zone_utils->init(rados.get(), zone.get());
   quota->init(zone.get());
   sync_modules->init(zone.get());
@@ -275,11 +276,11 @@ void RGWServices_Def::shutdown()
 }
 
 
-int RGWServices::do_init(CephContext *_cct, bool have_cache, bool raw, bool run_sync, optional_yield y, const DoutPrefixProvider *dpp)
+int RGWServices::do_init(rgw::sal::Store* store, CephContext *_cct, bool have_cache, bool raw, bool run_sync, optional_yield y, const DoutPrefixProvider *dpp)
 {
   cct = _cct;
 
-  int r = _svc.init(cct, have_cache, raw, run_sync, y, dpp);
+  int r = _svc.init(store, cct, have_cache, raw, run_sync, y, dpp);
   if (r < 0) {
     return r;
   }

@@ -81,7 +81,7 @@ public:
     RGWSI_Bucket_Sync *bucket_sync{nullptr};
   } svc;
 
-  RGWSI_Bucket_SObj(CephContext *cct);
+  RGWSI_Bucket_SObj(rgw::sal::Store* store, CephContext *cct);
   ~RGWSI_Bucket_SObj();
 
   RGWSI_Bucket_BE_Handler& get_ep_be_handler() override {

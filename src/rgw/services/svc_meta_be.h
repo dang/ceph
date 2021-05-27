@@ -131,7 +131,7 @@ public:
     MDBE_OTP  = 1,
   };
 
-  RGWSI_MetaBackend(CephContext *cct) : RGWServiceInstance(cct) {}
+  RGWSI_MetaBackend(rgw::sal::Store* store, CephContext *cct) : RGWServiceInstance(store, cct) {}
   virtual ~RGWSI_MetaBackend() {}
 
   virtual Type get_type() = 0;

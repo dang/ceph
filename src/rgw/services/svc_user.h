@@ -27,7 +27,7 @@ class RGWGetUserStats_CB;
 class RGWSI_User : public RGWServiceInstance
 {
 public:
-  RGWSI_User(CephContext *cct);
+  RGWSI_User(rgw::sal::Store* store, CephContext *cct);
   virtual ~RGWSI_User();
 
   static string get_meta_key(const rgw_user& user) {

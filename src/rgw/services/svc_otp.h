@@ -41,7 +41,7 @@ public:
     RGWSI_MetaBackend *meta_be{nullptr};
   } svc;
 
-  RGWSI_OTP(CephContext *cct);
+  RGWSI_OTP(rgw::sal::Store* store, CephContext *cct);
   ~RGWSI_OTP();
 
   RGWSI_OTP_BE_Handler& get_be_handler() {

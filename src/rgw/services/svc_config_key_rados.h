@@ -44,7 +44,7 @@ public:
     svc.rados = rados_svc;
   }
 
-  RGWSI_ConfigKey_RADOS(CephContext *cct) : RGWSI_ConfigKey(cct) {}
+  RGWSI_ConfigKey_RADOS(rgw::sal::Store* store, CephContext *cct) : RGWSI_ConfigKey(store, cct) {}
 
   int get(const string& key, bool secure, bufferlist *result) override;
 };

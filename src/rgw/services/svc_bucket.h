@@ -24,7 +24,7 @@
 class RGWSI_Bucket : public RGWServiceInstance
 {
 public:
-  RGWSI_Bucket(CephContext *cct) : RGWServiceInstance(cct) {}
+  RGWSI_Bucket(rgw::sal::Store* store, CephContext *cct) : RGWServiceInstance(store, cct) {}
   virtual ~RGWSI_Bucket() {}
 
   static string get_entrypoint_meta_key(const rgw_bucket& bucket);

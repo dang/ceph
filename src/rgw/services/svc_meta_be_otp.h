@@ -52,7 +52,7 @@ public:
     Context_OTP(RGWSI_SysObj*_sysobj_svc) : RGWSI_MetaBackend_SObj::Context_SObj(_sysobj_svc, nullptr) {}
   };
 
-  RGWSI_MetaBackend_OTP(CephContext *cct);
+  RGWSI_MetaBackend_OTP(rgw::sal::Store* store, CephContext *cct);
   virtual ~RGWSI_MetaBackend_OTP();
 
   RGWSI_MetaBackend::Type get_type() {

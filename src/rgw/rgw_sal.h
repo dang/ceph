@@ -906,6 +906,7 @@ class Zone {
     virtual bool get_redirect_endpoint(std::string* endpoint) = 0;
     virtual bool has_zonegroup_api(const std::string& api) const = 0;
     virtual const std::string& get_current_period_id() = 0;
+    virtual int list_zonegroups(const DoutPrefixProvider *dpp, std::list<std::string>& zonegroups) = 0;
 };
 
 class LuaScriptManager {

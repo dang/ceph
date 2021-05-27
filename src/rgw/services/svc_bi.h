@@ -26,7 +26,7 @@ struct RGWBucketEnt;
 class RGWSI_BucketIndex : public RGWServiceInstance
 {
 public:
-  RGWSI_BucketIndex(CephContext *cct) : RGWServiceInstance(cct) {}
+  RGWSI_BucketIndex(rgw::sal::Store* store, CephContext *cct) : RGWServiceInstance(store, cct) {}
   virtual ~RGWSI_BucketIndex() {}
 
   virtual int init_index(const DoutPrefixProvider *dpp, RGWBucketInfo& bucket_info) = 0;

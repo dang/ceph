@@ -21,7 +21,7 @@
 using Svc = RGWSI_MDLog::Svc;
 using Cursor = RGWPeriodHistory::Cursor;
 
-RGWSI_MDLog::RGWSI_MDLog(CephContext *cct, bool _run_sync) : RGWServiceInstance(cct), run_sync(_run_sync) {
+RGWSI_MDLog::RGWSI_MDLog(rgw::sal::Store* store, CephContext *cct, bool _run_sync) : RGWServiceInstance(store, cct), run_sync(_run_sync) {
 }
 
 RGWSI_MDLog::~RGWSI_MDLog() {
@@ -44,7 +44,7 @@ int RGWSI_MDLog::do_start(optional_yield y, const DoutPrefixProvider *dpp)
 
   current_log = get_log(current_period.get_id());
 
-  period_puller.reset(new RGWPeriodPuller(svc.zone, svc.sysobj));
+  period_puller.reset(new RGWPeriodPuller(store, svc.zone, svc.sysobj));
   period_history.reset(new RGWPeriodHistory(cct, period_puller.get(),
                                             current_period));
 

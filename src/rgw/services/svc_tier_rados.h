@@ -122,7 +122,7 @@ class RGWSI_Tier_RADOS : public RGWServiceInstance
   RGWSI_Zone *zone_svc{nullptr};
 
 public:
-  RGWSI_Tier_RADOS(CephContext *cct): RGWServiceInstance(cct) {}
+  RGWSI_Tier_RADOS(rgw::sal::Store* store, CephContext *cct): RGWServiceInstance(store, cct) {}
 
   void init(RGWSI_Zone *_zone_svc) {
     zone_svc = _zone_svc;

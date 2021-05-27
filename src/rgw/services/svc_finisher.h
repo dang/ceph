@@ -28,7 +28,7 @@ protected:
   int do_start(optional_yield y, const DoutPrefixProvider *dpp) override;
 
 public:
-  RGWSI_Finisher(CephContext *cct): RGWServiceInstance(cct) {}
+  RGWSI_Finisher(rgw::sal::Store* store, CephContext *cct): RGWServiceInstance(store, cct) {}
   ~RGWSI_Finisher();
 
   class ShutdownCB {

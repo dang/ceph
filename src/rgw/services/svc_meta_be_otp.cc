@@ -10,7 +10,7 @@
 #define dout_subsys ceph_subsys_rgw
 
 
-RGWSI_MetaBackend_OTP::RGWSI_MetaBackend_OTP(CephContext *cct) : RGWSI_MetaBackend_SObj(cct) {
+RGWSI_MetaBackend_OTP::RGWSI_MetaBackend_OTP(rgw::sal::Store* store, CephContext *cct) : RGWSI_MetaBackend_SObj(store, cct) {
 }
 
 RGWSI_MetaBackend_OTP::~RGWSI_MetaBackend_OTP() {

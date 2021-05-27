@@ -136,7 +136,7 @@ public:
   }
 };
 
-RGWSI_Bucket_SObj::RGWSI_Bucket_SObj(CephContext *cct): RGWSI_Bucket(cct) {
+RGWSI_Bucket_SObj::RGWSI_Bucket_SObj(rgw::sal::Store* store, CephContext *cct): RGWSI_Bucket(store, cct) {
 }
 
 RGWSI_Bucket_SObj::~RGWSI_Bucket_SObj() {

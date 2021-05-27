@@ -59,7 +59,7 @@ public:
   }
 };
 
-RGWSI_User_RADOS::RGWSI_User_RADOS(CephContext *cct): RGWSI_User(cct) {
+RGWSI_User_RADOS::RGWSI_User_RADOS(rgw::sal::Store* store, CephContext *cct): RGWSI_User(store, cct) {
 }
 
 RGWSI_User_RADOS::~RGWSI_User_RADOS() {

@@ -19,6 +19,7 @@
 #include "rgw/rgw_service.h"
 #include "rgw/rgw_period_history.h"
 #include "rgw/rgw_period_puller.h"
+#include "rgw/rgw_sal_forward.h"
 
 #include "svc_meta_be.h"
 
@@ -55,7 +56,7 @@ class RGWSI_MDLog : public RGWServiceInstance
   std::unique_ptr<RGWPeriodHistory> period_history;
 
 public:
-  RGWSI_MDLog(CephContext *cct, bool run_sync);
+  RGWSI_MDLog(rgw::sal::Store* store, CephContext *cct, bool run_sync);
   virtual ~RGWSI_MDLog();
 
   struct Svc {

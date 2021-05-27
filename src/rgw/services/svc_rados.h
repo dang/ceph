@@ -59,7 +59,7 @@ private:
                    bool *is_truncated);
 
 public:
-  RGWSI_RADOS(CephContext *cct);
+  RGWSI_RADOS(rgw::sal::Store* store, CephContext *cct);
   ~RGWSI_RADOS();
   librados::Rados* get_rados_handle();
 

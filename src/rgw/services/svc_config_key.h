@@ -23,7 +23,7 @@
 class RGWSI_ConfigKey : public RGWServiceInstance
 {
 public:
-  RGWSI_ConfigKey(CephContext *cct) : RGWServiceInstance(cct) {}
+  RGWSI_ConfigKey(rgw::sal::Store* store, CephContext *cct) : RGWServiceInstance(store, cct) {}
   virtual ~RGWSI_ConfigKey() {}
 
   virtual int get(const string& key, bool secure, bufferlist *result) = 0;

@@ -100,7 +100,7 @@ protected:
   void set_enabled(bool status);
 
 public:
-  RGWSI_SysObj_Cache(const DoutPrefixProvider *dpp, CephContext *cct) : RGWSI_SysObj_Core(cct), asocket(dpp, this) {
+  RGWSI_SysObj_Cache(const DoutPrefixProvider *dpp, rgw::sal::Store* store, CephContext *cct) : RGWSI_SysObj_Core(store, cct), asocket(dpp, this) {
     cache.set_ctx(cct);
   }
 
