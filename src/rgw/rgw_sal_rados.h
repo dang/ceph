@@ -57,6 +57,7 @@ class RadosUser : public User {
 		     optional_yield y) override;
     virtual Bucket* create_bucket(rgw_bucket& bucket, ceph::real_time creation_time) override;
     virtual int read_attrs(const DoutPrefixProvider* dpp, optional_yield y) override;
+    virtual int merge_and_store_attrs(const DoutPrefixProvider* dpp, Attrs& new_attrs, optional_yield y) override;
     virtual int read_stats(const DoutPrefixProvider *dpp,
                            optional_yield y, RGWStorageStats* stats,
 			   ceph::real_time* last_stats_sync = nullptr,

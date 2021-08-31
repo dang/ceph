@@ -318,6 +318,14 @@ class User {
     static bool empty(User* u) { return (!u || u->info.user_id.id.empty()); }
     static bool empty(std::unique_ptr<User>& u) { return (!u || u->info.user_id.id.empty()); }
     virtual int read_attrs(const DoutPrefixProvider* dpp, optional_yield y) = 0;
+    /** Set the attributes in attrs, leaving any other existing attrs set, and
+     * write them to the backing store; a merge operation */
+    virtual int merge_and_store_attrs(const DoutPrefixProvider* dpp, Attrs& new_attrs, optional_yield y) {
+      for(auto& it : new_attrs) {
+	attrs[it.first] = it.second;
+      }
+      return 0;
+    }
     virtual int read_stats(const DoutPrefixProvider *dpp,
                            optional_yield y, RGWStorageStats* stats,
 			   ceph::real_time* last_stats_sync = nullptr,
@@ -330,7 +338,7 @@ class User {
     virtual int trim_usage(const DoutPrefixProvider *dpp, uint64_t start_epoch, uint64_t end_epoch) = 0;
     virtual RGWObjVersionTracker& get_version_tracker() { return objv_tracker; }
     virtual Attrs& get_attrs() { return attrs; }
-    virtual void set_attrs(Attrs& _attrs) { attrs = _attrs; }
+    virtual int set_attrs(Attrs& _attrs) { attrs = _attrs; return 0; }
 
     virtual int load_user(const DoutPrefixProvider* dpp, optional_yield y) = 0;
     virtual int store_user(const DoutPrefixProvider* dpp, optional_yield y, bool exclusive, RGWUserInfo* old_info = nullptr) = 0;
