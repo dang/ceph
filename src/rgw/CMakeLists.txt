@@ -135,6 +135,7 @@ set(librgw_common_srcs
   rgw_sal.cc
   rgw_sal_filter.cc
   rgw_sal_rados.cc
+  rgw_sal_sample.cc
   rgw_string.cc
   rgw_tag.cc
   rgw_tag_s3.cc

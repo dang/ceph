@@ -45,6 +45,7 @@ extern rgw::sal::Store* newDBStore(CephContext *cct);
 extern rgw::sal::Store* newMotrStore(CephContext *cct);
 #endif
 extern rgw::sal::Store* newBaseFilter(rgw::sal::Store* next);
+extern rgw::sal::Store* newSampleFilter(rgw::sal::Store* next);
 }
 
 RGWObjState::RGWObjState() {
@@ -192,6 +193,15 @@ rgw::sal::Store* StoreManager::init_storage_provider(const DoutPrefixProvider* d
   if (filter.compare("base") == 0) {
     rgw::sal::Store* next = store;
     store = newBaseFilter(next);
+
+    if (store->initialize(cct, dpp) < 0) {
+      delete store;
+      delete next;
+      return nullptr;
+    }
+  } else if (filter.compare("sample") == 0) {
+    rgw::sal::Store* next = store;
+    store = newSampleFilter(next);
 
     if (store->initialize(cct, dpp) < 0) {
       delete store;

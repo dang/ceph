@@ -400,6 +400,8 @@ int radosgw_Main(int argc, const char **argv)
   const auto& config_filter = g_conf().get_val<std::string>("rgw_filter");
   if (config_filter == "base") {
     rgw_filter = "base";
+  } else if (config_filter == "sample") {
+    rgw_filter = "sample";
   }
 
   rgw::sal::Store* store =
