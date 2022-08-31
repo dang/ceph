@@ -186,6 +186,7 @@ if(WITH_JAEGER)
 endif()
 
 add_library(rgw_common STATIC ${librgw_common_srcs})
+add_sanitizers(rgw_common)
 
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-Wimplicit-const-int-float-conversion"
@@ -307,6 +308,7 @@ set_source_files_properties(rgw_iam_policy.cc PROPERTIES
 
 add_library(rgw_a STATIC
     ${rgw_a_srcs})
+add_sanitizers(rgw_a)
 
 target_compile_definitions(rgw_a PUBLIC "-DCLS_CLIENT_HIDE_IOCTX")
 target_include_directories(rgw_a PUBLIC "${CMAKE_SOURCE_DIR}/src/dmclock/support/src")
@@ -345,6 +347,7 @@ set(rgw_schedulers_srcs
 add_library(rgw_schedulers STATIC ${rgw_schedulers_srcs})
 target_link_libraries(rgw_schedulers
   PUBLIC dmclock::dmclock spawn)
+add_sanitizers(rgw_schedulers)
 
 set(radosgw_srcs
   rgw_main.cc
@@ -354,6 +357,7 @@ set(radosgw_srcs
   rgw_kmip_client_impl.cc)
 
 add_executable(radosgw ${radosgw_srcs})
+add_sanitizers(radosgw)
 
 target_compile_definitions(radosgw PUBLIC "-DCLS_CLIENT_HIDE_IOCTX")
 target_include_directories(radosgw
@@ -376,6 +380,7 @@ set(radosgw_admin_srcs
   rgw_sync_checkpoint.cc
   rgw_orphan.cc)
 add_executable(radosgw-admin ${radosgw_admin_srcs})
+add_sanitizers(radosgw-admin)
 target_link_libraries(radosgw-admin ${rgw_libs} librados
   cls_rgw_client cls_otp_client cls_lock_client cls_refcount_client
   cls_log_client cls_timeindex_client neorados_cls_fifo
@@ -388,6 +393,7 @@ install(TARGETS radosgw-admin DESTINATION bin)
 set(radosgw_es_srcs
   rgw_es_main.cc)
 add_executable(radosgw-es ${radosgw_es_srcs})
+add_sanitizers(radosgw-es)
 target_link_libraries(radosgw-es ${rgw_libs} librados
   cls_rgw_client cls_otp_client cls_lock_client cls_refcount_client
   cls_log_client cls_timeindex_client neorados_cls_fifo
@@ -399,6 +405,7 @@ install(TARGETS radosgw-es DESTINATION bin)
 set(radosgw_token_srcs
   rgw_token.cc)
 add_executable(radosgw-token ${radosgw_token_srcs})
+add_sanitizers(radosgw-token)
 target_link_libraries(radosgw-token librados
   global ${ALLOC_LIBS})
 install(TARGETS radosgw-token DESTINATION bin)
@@ -406,6 +413,7 @@ install(TARGETS radosgw-token DESTINATION bin)
 set(radosgw_object_expirer_srcs
   rgw_object_expirer.cc)
 add_executable(radosgw-object-expirer ${radosgw_object_expirer_srcs})
+add_sanitizers(radosgw-object-expirer)
 target_link_libraries(radosgw-object-expirer ${rgw_libs} librados
   cls_rgw_client cls_otp_client cls_lock_client cls_refcount_client
   cls_log_client cls_timeindex_client neorados_cls_fifo
@@ -418,6 +426,7 @@ set(librgw_srcs
   librgw.cc
   rgw_file.cc)
 add_library(rgw SHARED ${librgw_srcs})
+add_sanitizers(rgw)
 target_link_libraries(rgw
   PRIVATE
   ${rgw_libs}
@@ -454,12 +463,14 @@ install(TARGETS rgw DESTINATION ${CMAKE_INSTALL_LIBDIR})
 if(WITH_TESTS)
   add_executable(ceph_rgw_jsonparser
     rgw_jsonparser.cc)
+  add_sanitizers(ceph_rgw_jsonparser)
   target_link_libraries(ceph_rgw_jsonparser
     ${rgw_libs}
     global)
 
   add_executable(ceph_rgw_multiparser
     rgw_multiparser.cc)
+  add_sanitizers(ceph_rgw_multiparser)
   target_link_libraries(ceph_rgw_multiparser
     ${rgw_libs}
     global)

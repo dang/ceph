@@ -594,11 +594,26 @@ endif()
 
 if(sanitizers)
   find_package(Sanitizers REQUIRED ${sanitizers})
-  add_compile_options(${Sanitizers_COMPILE_OPTIONS})
-  string(REPLACE ";" " " sanitiers_compile_flags "${Sanitizers_COMPILE_OPTIONS}")
-  string(APPEND CMAKE_EXE_LINKER_FLAGS " ${sanitiers_compile_flags}")
-  string(APPEND CMAKE_SHARED_LINKER_FLAGS " ${sanitiers_compile_flags}")
+  #add_compile_options(${Sanitizers_COMPILE_OPTIONS})
+  #string(REPLACE ";" " " sanitiers_compile_flags "${Sanitizers_COMPILE_OPTIONS}")
+  #string(APPEND CMAKE_EXE_LINKER_FLAGS " ${sanitiers_compile_flags}")
+  #string(APPEND CMAKE_SHARED_LINKER_FLAGS " ${sanitiers_compile_flags}")
 endif()
+
+function (add_sanitizers TARGET)
+	message(STATUS "add_sanitizers ${TARGET}")
+  if (NOT sanitizers)
+	  message(STATUS "     no sanitizers")
+    return()
+  endif()
+  string(REPLACE ";" " " sanitiers_compile_flags "${Sanitizers_COMPILE_OPTIONS}")
+  message(STATUS "     flags: ${sanitiers_compile_flags}")
+  # Set compile- and link-flags for target.
+  set_property(TARGET ${TARGET} APPEND_STRING
+    PROPERTY COMPILE_FLAGS "${sanitiers_compile_flags}")
+  set_property(TARGET ${TARGET} APPEND_STRING
+    PROPERTY LINK_FLAGS " ${sanitiers_compile_flags}")
+endfunction ()
 
 # Rocksdb
 option(WITH_SYSTEM_ROCKSDB "require and build with system rocksdb" OFF)

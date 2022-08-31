@@ -17,6 +17,7 @@ set(dbstore_mgr_srcs
     )
 
 add_library(dbstore_lib ${dbstore_srcs})
+add_sanitizers(dbstore_lib)
 target_include_directories(dbstore_lib PUBLIC "${CMAKE_SOURCE_DIR}/src/fmt/include")
 target_include_directories(dbstore_lib PUBLIC "${CMAKE_SOURCE_DIR}/src/rgw")
 set(link_targets spawn)
@@ -49,6 +50,7 @@ endif()
 
 include_directories(${CMAKE_INCLUDE_DIR})
 add_library(dbstore STATIC ${dbstore_mgr_srcs})
+add_sanitizers(dbstore)
 target_link_libraries(dbstore ${CMAKE_LINK_LIBRARIES})
 
 # testing purpose
@@ -57,5 +59,6 @@ set(dbstore_main_srcs
 
 set (CMAKE_LINK_LIBRARIES ${CMAKE_LINK_LIBRARIES} dbstore)
 add_executable(dbstore-bin ${dbstore_main_srcs})
+add_sanitizers(dbstore-bin)
 add_dependencies(dbstore-bin dbstore)
 target_link_libraries(dbstore-bin ${CMAKE_LINK_LIBRARIES})
