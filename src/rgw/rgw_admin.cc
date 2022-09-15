@@ -4,7 +4,6 @@
 #include <errno.h>
 #include <iostream>
 #include <sstream>
-#include <string>
 
 #include <boost/optional.hpp>
 
@@ -36,6 +35,7 @@ extern "C" {
 #include "include/utime.h"
 #include "include/str_list.h"
 
+#include "rgw_admin.h"
 #include "rgw_user.h"
 #include "rgw_bucket.h"
 #include "rgw_otp.h"
@@ -496,137 +496,6 @@ void usage()
 }
 
 
-class SimpleCmd {
-public:
-  struct Def {
-    string cmd;
-    std::any opt;
-  };
-
-  using Aliases = std::vector<std::set<string> >;
-  using Commands = std::vector<Def>;
-
-private:
-  struct Node {
-    map<string, Node> next;
-    set<string> expected; /* separate un-normalized list */
-    std::any opt;
-  };
-
-  Node cmd_root;
-  map<string, string> alias_map;
-
-  string normalize_alias(const string& s) const {
-    auto iter = alias_map.find(s);
-    if (iter == alias_map.end()) {
-      return s;
-    }
-
-    return iter->second;
-  }
-  void init_alias_map(Aliases& aliases) {
-    for (auto& alias_set : aliases) {
-      std::optional<string> first;
-
-      for (auto& alias : alias_set) {
-        if (!first) {
-          first = alias;
-        } else {
-          alias_map[alias] = *first;
-        }
-      }
-    }
-  }
-
-  bool gen_next_expected(Node *node, vector<string> *expected, bool ret) {
-    for (auto& next_cmd : node->expected) {
-      expected->push_back(next_cmd);
-    }
-    return ret;
-  }
-
-  Node root;
-
-public:
-  SimpleCmd() {}
-
-  SimpleCmd(std::optional<Commands> cmds,
-            std::optional<Aliases> aliases) {
-    if (aliases) {
-      add_aliases(*aliases);
-    }
-
-    if (cmds) {
-      add_commands(*cmds);
-    }
-  }
-
-  void add_aliases(Aliases& aliases) {
-    init_alias_map(aliases);
-  }
-
-  void add_commands(std::vector<Def>& cmds) {
-    for (auto& cmd : cmds) {
-      vector<string> words;
-      get_str_vec(cmd.cmd, " ", words);
-
-      auto node = &cmd_root;
-      for (auto& word : words) {
-        auto norm = normalize_alias(word);
-        auto parent = node;
-
-        node->expected.insert(word);
-
-        node = &node->next[norm];
-
-        if (norm == "[*]") { /* optional param at the end */
-          parent->next["*"] = *node; /* can be also looked up by '*' */
-          parent->opt = cmd.opt;
-        }
-      }
-
-      node->opt = cmd.opt;
-    }
-  }
-
-  template <class Container>
-  bool find_command(Container& args,
-                    std::any *opt_cmd,
-                    vector<string> *extra_args,
-                    string *error,
-                    vector<string> *expected) {
-    auto node = &cmd_root;
-
-    std::optional<std::any> found_opt;
-
-    for (auto& arg : args) {
-      string norm = normalize_alias(arg);
-      auto iter = node->next.find(norm);
-      if (iter == node->next.end()) {
-        iter = node->next.find("*");
-        if (iter == node->next.end()) {
-          *error = string("ERROR: Unrecognized argument: '") + arg + "'";
-          return gen_next_expected(node, expected, false);
-        }
-        extra_args->push_back(arg);
-        if (!found_opt) {
-          found_opt = node->opt;
-        }
-      }
-      node = &(iter->second);
-    }
-
-    *opt_cmd = found_opt.value_or(node->opt);
-
-    if (!opt_cmd->has_value()) {
-      *error ="ERROR: Unknown command";
-      return gen_next_expected(node, expected, false);
-    }
-
-    return true;
-  }
-};
-
 
 namespace rgw_admin {
 
@@ -841,7 +710,8 @@ enum class OPT {
   SCRIPT_RM,
   SCRIPT_PACKAGE_ADD,
   SCRIPT_PACKAGE_RM,
-  SCRIPT_PACKAGE_LIST
+  SCRIPT_PACKAGE_LIST,
+  MAX_COMMON_CMD // Marker of point where store-specific commands start
 };
 
 }
@@ -849,233 +719,233 @@ enum class OPT {
 using namespace rgw_admin;
 
 static SimpleCmd::Commands all_cmds = {
-  { "user create", OPT::USER_CREATE },
-  { "user info", OPT::USER_INFO },
-  { "user modify", OPT::USER_MODIFY },
-  { "user rename", OPT::USER_RENAME },
-  { "user rm", OPT::USER_RM },
-  { "user suspend", OPT::USER_SUSPEND },
-  { "user enable", OPT::USER_ENABLE },
-  { "user check", OPT::USER_CHECK },
-  { "user stats", OPT::USER_STATS },
-  { "user list", OPT::USER_LIST },
-  { "subuser create", OPT::SUBUSER_CREATE },
-  { "subuser modify", OPT::SUBUSER_MODIFY },
-  { "subuser rm", OPT::SUBUSER_RM },
-  { "key create", OPT::KEY_CREATE },
-  { "key rm", OPT::KEY_RM },
-  { "buckets list", OPT::BUCKETS_LIST },
-  { "bucket list", OPT::BUCKETS_LIST },
-  { "bucket limit check", OPT::BUCKET_LIMIT_CHECK },
-  { "bucket link", OPT::BUCKET_LINK },
-  { "bucket unlink", OPT::BUCKET_UNLINK },
-  { "bucket layout", OPT::BUCKET_LAYOUT },
-  { "bucket stats", OPT::BUCKET_STATS },
-  { "bucket check", OPT::BUCKET_CHECK },
-  { "bucket sync checkpoint", OPT::BUCKET_SYNC_CHECKPOINT },
-  { "bucket sync info", OPT::BUCKET_SYNC_INFO },
-  { "bucket sync status", OPT::BUCKET_SYNC_STATUS },
-  { "bucket sync markers", OPT::BUCKET_SYNC_MARKERS },
-  { "bucket sync init", OPT::BUCKET_SYNC_INIT },
-  { "bucket sync run", OPT::BUCKET_SYNC_RUN },
-  { "bucket sync disable", OPT::BUCKET_SYNC_DISABLE },
-  { "bucket sync enable", OPT::BUCKET_SYNC_ENABLE },
-  { "bucket rm", OPT::BUCKET_RM },
-  { "bucket rewrite", OPT::BUCKET_REWRITE },
-  { "bucket reshard", OPT::BUCKET_RESHARD },
-  { "bucket chown", OPT::BUCKET_CHOWN },
-  { "bucket radoslist", OPT::BUCKET_RADOS_LIST },
-  { "bucket rados list", OPT::BUCKET_RADOS_LIST },
-  { "bucket shard objects", OPT::BUCKET_SHARD_OBJECTS },
-  { "bucket shard object", OPT::BUCKET_SHARD_OBJECTS },
-  { "bucket object shard", OPT::BUCKET_OBJECT_SHARD },
-  { "policy", OPT::POLICY },
-  { "pool add", OPT::POOL_ADD },
-  { "pool rm", OPT::POOL_RM },
-  { "pool list", OPT::POOLS_LIST },
-  { "pools list", OPT::POOLS_LIST },
-  { "log list", OPT::LOG_LIST },
-  { "log show", OPT::LOG_SHOW },
-  { "log rm", OPT::LOG_RM },
-  { "usage show", OPT::USAGE_SHOW },
-  { "usage trim", OPT::USAGE_TRIM },
-  { "usage clear", OPT::USAGE_CLEAR },
-  { "object put", OPT::OBJECT_PUT },
-  { "object rm", OPT::OBJECT_RM },
-  { "object unlink", OPT::OBJECT_UNLINK },
-  { "object stat", OPT::OBJECT_STAT },
-  { "object rewrite", OPT::OBJECT_REWRITE },
-  { "objects expire", OPT::OBJECTS_EXPIRE },
-  { "objects expire-stale list", OPT::OBJECTS_EXPIRE_STALE_LIST },
-  { "objects expire-stale rm", OPT::OBJECTS_EXPIRE_STALE_RM },
-  { "bi get", OPT::BI_GET },
-  { "bi put", OPT::BI_PUT },
-  { "bi list", OPT::BI_LIST },
-  { "bi purge", OPT::BI_PURGE },
-  { "olh get", OPT::OLH_GET },
-  { "olh readlog", OPT::OLH_READLOG },
-  { "quota set", OPT::QUOTA_SET },
-  { "quota enable", OPT::QUOTA_ENABLE },
-  { "quota disable", OPT::QUOTA_DISABLE },
-  { "ratelimit get", OPT::RATELIMIT_GET },
-  { "ratelimit set", OPT::RATELIMIT_SET },
-  { "ratelimit enable", OPT::RATELIMIT_ENABLE },
-  { "ratelimit disable", OPT::RATELIMIT_DISABLE },
-  { "gc list", OPT::GC_LIST },
-  { "gc process", OPT::GC_PROCESS },
-  { "lc list", OPT::LC_LIST },
-  { "lc get", OPT::LC_GET },
-  { "lc process", OPT::LC_PROCESS },
-  { "lc reshard fix", OPT::LC_RESHARD_FIX },
-  { "orphans find", OPT::ORPHANS_FIND },
-  { "orphans finish", OPT::ORPHANS_FINISH },
-  { "orphans list jobs", OPT::ORPHANS_LIST_JOBS },
-  { "orphans list-jobs", OPT::ORPHANS_LIST_JOBS },
-  { "zonegroup add", OPT::ZONEGROUP_ADD },
-  { "zonegroup create", OPT::ZONEGROUP_CREATE },
-  { "zonegroup default", OPT::ZONEGROUP_DEFAULT },
-  { "zonegroup delete", OPT::ZONEGROUP_DELETE },
-  { "zonegroup get", OPT::ZONEGROUP_GET },
-  { "zonegroup modify", OPT::ZONEGROUP_MODIFY },
-  { "zonegroup set", OPT::ZONEGROUP_SET },
-  { "zonegroup list", OPT::ZONEGROUP_LIST },
-  { "zonegroups list", OPT::ZONEGROUP_LIST },
-  { "zonegroup remove", OPT::ZONEGROUP_REMOVE },
-  { "zonegroup remove zone", OPT::ZONEGROUP_REMOVE },
-  { "zonegroup rename", OPT::ZONEGROUP_RENAME },
-  { "zonegroup placement add", OPT::ZONEGROUP_PLACEMENT_ADD },
-  { "zonegroup placement modify", OPT::ZONEGROUP_PLACEMENT_MODIFY },
-  { "zonegroup placement rm", OPT::ZONEGROUP_PLACEMENT_RM },
-  { "zonegroup placement list", OPT::ZONEGROUP_PLACEMENT_LIST },
-  { "zonegroup placement get", OPT::ZONEGROUP_PLACEMENT_GET },
-  { "zonegroup placement default", OPT::ZONEGROUP_PLACEMENT_DEFAULT },
-  { "zone create", OPT::ZONE_CREATE },
-  { "zone delete", OPT::ZONE_DELETE },
-  { "zone get", OPT::ZONE_GET },
-  { "zone modify", OPT::ZONE_MODIFY },
-  { "zone set", OPT::ZONE_SET },
-  { "zone list", OPT::ZONE_LIST },
-  { "zones list", OPT::ZONE_LIST },
-  { "zone rename", OPT::ZONE_RENAME },
-  { "zone default", OPT::ZONE_DEFAULT },
-  { "zone placement add", OPT::ZONE_PLACEMENT_ADD },
-  { "zone placement modify", OPT::ZONE_PLACEMENT_MODIFY },
-  { "zone placement rm", OPT::ZONE_PLACEMENT_RM },
-  { "zone placement list", OPT::ZONE_PLACEMENT_LIST },
-  { "zone placement get", OPT::ZONE_PLACEMENT_GET },
-  { "caps add", OPT::CAPS_ADD },
-  { "caps rm", OPT::CAPS_RM },
-  { "metadata get [*]", OPT::METADATA_GET },
-  { "metadata put [*]", OPT::METADATA_PUT },
-  { "metadata rm [*]", OPT::METADATA_RM },
-  { "metadata list [*]", OPT::METADATA_LIST },
-  { "metadata sync status", OPT::METADATA_SYNC_STATUS },
-  { "metadata sync init", OPT::METADATA_SYNC_INIT },
-  { "metadata sync run", OPT::METADATA_SYNC_RUN },
-  { "mdlog list", OPT::MDLOG_LIST },
-  { "mdlog autotrim", OPT::MDLOG_AUTOTRIM },
-  { "mdlog trim", OPT::MDLOG_TRIM },
-  { "mdlog fetch", OPT::MDLOG_FETCH },
-  { "mdlog status", OPT::MDLOG_STATUS },
-  { "sync error list", OPT::SYNC_ERROR_LIST },
-  { "sync error trim", OPT::SYNC_ERROR_TRIM },
-  { "sync policy get", OPT::SYNC_POLICY_GET },
-  { "sync group create", OPT::SYNC_GROUP_CREATE },
-  { "sync group modify", OPT::SYNC_GROUP_MODIFY },
-  { "sync group get", OPT::SYNC_GROUP_GET },
-  { "sync group remove", OPT::SYNC_GROUP_REMOVE },
-  { "sync group flow create", OPT::SYNC_GROUP_FLOW_CREATE },
-  { "sync group flow remove", OPT::SYNC_GROUP_FLOW_REMOVE },
-  { "sync group pipe create", OPT::SYNC_GROUP_PIPE_CREATE },
-  { "sync group pipe modify", OPT::SYNC_GROUP_PIPE_MODIFY },
-  { "sync group pipe remove", OPT::SYNC_GROUP_PIPE_REMOVE },
-  { "bilog list", OPT::BILOG_LIST },
-  { "bilog trim", OPT::BILOG_TRIM },
-  { "bilog status", OPT::BILOG_STATUS },
-  { "bilog autotrim", OPT::BILOG_AUTOTRIM },
-  { "data sync status", OPT::DATA_SYNC_STATUS },
-  { "data sync init", OPT::DATA_SYNC_INIT },
-  { "data sync run", OPT::DATA_SYNC_RUN },
-  { "datalog list", OPT::DATALOG_LIST },
-  { "datalog status", OPT::DATALOG_STATUS },
-  { "datalog autotrim", OPT::DATALOG_AUTOTRIM },
-  { "datalog trim", OPT::DATALOG_TRIM },
-  { "datalog type", OPT::DATALOG_TYPE },
-  { "datalog prune", OPT::DATALOG_PRUNE },
-  { "realm create", OPT::REALM_CREATE },
-  { "realm rm", OPT::REALM_DELETE },
-  { "realm get", OPT::REALM_GET },
-  { "realm get default", OPT::REALM_GET_DEFAULT },
-  { "realm get-default", OPT::REALM_GET_DEFAULT },
-  { "realm list", OPT::REALM_LIST },
-  { "realm list periods", OPT::REALM_LIST_PERIODS },
-  { "realm list-periods", OPT::REALM_LIST_PERIODS },
-  { "realm rename", OPT::REALM_RENAME },
-  { "realm set", OPT::REALM_SET },
-  { "realm default", OPT::REALM_DEFAULT },
-  { "realm pull", OPT::REALM_PULL },
-  { "period delete", OPT::PERIOD_DELETE },
-  { "period get", OPT::PERIOD_GET },
-  { "period get-current", OPT::PERIOD_GET_CURRENT },
-  { "period get current", OPT::PERIOD_GET_CURRENT },
-  { "period pull", OPT::PERIOD_PULL },
-  { "period push", OPT::PERIOD_PUSH },
-  { "period list", OPT::PERIOD_LIST },
-  { "period update", OPT::PERIOD_UPDATE },
-  { "period commit", OPT::PERIOD_COMMIT },
-  { "global quota get", OPT::GLOBAL_QUOTA_GET },
-  { "global quota set", OPT::GLOBAL_QUOTA_SET },
-  { "global quota enable", OPT::GLOBAL_QUOTA_ENABLE },
-  { "global quota disable", OPT::GLOBAL_QUOTA_DISABLE },
-  { "global ratelimit get", OPT::GLOBAL_RATELIMIT_GET },
-  { "global ratelimit set", OPT::GLOBAL_RATELIMIT_SET },
-  { "global ratelimit enable", OPT::GLOBAL_RATELIMIT_ENABLE },
-  { "global ratelimit disable", OPT::GLOBAL_RATELIMIT_DISABLE },
-  { "sync info", OPT::SYNC_INFO },
-  { "sync status", OPT::SYNC_STATUS },
-  { "role create", OPT::ROLE_CREATE },
-  { "role delete", OPT::ROLE_DELETE },
-  { "role get", OPT::ROLE_GET },
-  { "role-trust-policy modify", OPT::ROLE_TRUST_POLICY_MODIFY },
-  { "role list", OPT::ROLE_LIST },
-  { "role policy put", OPT::ROLE_POLICY_PUT },
-  { "role-policy put", OPT::ROLE_POLICY_PUT },
-  { "role policy list", OPT::ROLE_POLICY_LIST },
-  { "role-policy list", OPT::ROLE_POLICY_LIST },
-  { "role policy get", OPT::ROLE_POLICY_GET },
-  { "role-policy get", OPT::ROLE_POLICY_GET },
-  { "role policy delete", OPT::ROLE_POLICY_DELETE },
-  { "role-policy delete", OPT::ROLE_POLICY_DELETE },
-  { "role update", OPT::ROLE_UPDATE },
-  { "reshard bucket", OPT::BUCKET_RESHARD },
-  { "reshard add", OPT::RESHARD_ADD },
-  { "reshard list", OPT::RESHARD_LIST },
-  { "reshard status", OPT::RESHARD_STATUS },
-  { "reshard process", OPT::RESHARD_PROCESS },
-  { "reshard cancel", OPT::RESHARD_CANCEL },
-  { "mfa create", OPT::MFA_CREATE },
-  { "mfa remove", OPT::MFA_REMOVE },
-  { "mfa get", OPT::MFA_GET },
-  { "mfa list", OPT::MFA_LIST },
-  { "mfa check", OPT::MFA_CHECK },
-  { "mfa resync", OPT::MFA_RESYNC },
-  { "reshard stale-instances list", OPT::RESHARD_STALE_INSTANCES_LIST },
-  { "reshard stale list", OPT::RESHARD_STALE_INSTANCES_LIST },
-  { "reshard stale-instances delete", OPT::RESHARD_STALE_INSTANCES_DELETE },
-  { "reshard stale delete", OPT::RESHARD_STALE_INSTANCES_DELETE },
-  { "topic list", OPT::PUBSUB_TOPICS_LIST },
-  { "topic get", OPT::PUBSUB_TOPIC_GET },
-  { "topic rm", OPT::PUBSUB_TOPIC_RM },
-  { "subscription get", OPT::PUBSUB_SUB_GET },
-  { "subscription rm", OPT::PUBSUB_SUB_RM },
-  { "subscription pull", OPT::PUBSUB_SUB_PULL },
-  { "subscription ack", OPT::PUBSUB_EVENT_RM },
-  { "script put", OPT::SCRIPT_PUT },
-  { "script get", OPT::SCRIPT_GET },
-  { "script rm", OPT::SCRIPT_RM },
-  { "script-package add", OPT::SCRIPT_PACKAGE_ADD },
-  { "script-package rm", OPT::SCRIPT_PACKAGE_RM },
-  { "script-package list", OPT::SCRIPT_PACKAGE_LIST },
+  { "user create", CMD(OPT::USER_CREATE, false, false, false, true) },
+  { "user info", CMD(OPT::USER_INFO, false, true, false, false) },
+  { "user modify", CMD(OPT::USER_MODIFY, false, false, false, true) },
+  { "user rename", CMD(OPT::USER_RENAME, false, false, false, false) },
+  { "user rm", CMD(OPT::USER_RM, false, false, true, true) },
+  { "user suspend", CMD(OPT::USER_SUSPEND, false, false, false, true) },
+  { "user enable", CMD(OPT::USER_ENABLE, false, false, false, true) },
+  { "user check", CMD(OPT::USER_CHECK, false, false, false, false) },
+  { "user stats", CMD(OPT::USER_STATS, false, true, false, false) },
+  { "user list", CMD(OPT::USER_LIST, false, false, false, false) },
+  { "subuser create", CMD(OPT::SUBUSER_CREATE, false, false, false, true) },
+  { "subuser modify", CMD(OPT::SUBUSER_MODIFY, false, false, false, true) },
+  { "subuser rm", CMD(OPT::SUBUSER_RM, false, false, false, true) },
+  { "key create", CMD(OPT::KEY_CREATE, false, false, false, false) },
+  { "key rm", CMD(OPT::KEY_RM, false, false, false, false) },
+  { "buckets list", CMD(OPT::BUCKETS_LIST, false, true, false, false) },
+  { "bucket list", CMD(OPT::BUCKETS_LIST, false, true, false, false) },
+  { "bucket limit check", CMD(OPT::BUCKET_LIMIT_CHECK, false, true, false, false) },
+  { "bucket link", CMD(OPT::BUCKET_LINK, false, false, false, true) },
+  { "bucket unlink", CMD(OPT::BUCKET_UNLINK, false, false, false, true) },
+  { "bucket layout", CMD(OPT::BUCKET_LAYOUT, false, true, false, false) },
+  { "bucket stats", CMD(OPT::BUCKET_STATS, false, true, false, false) },
+  { "bucket check", CMD(OPT::BUCKET_CHECK, false, false, false, false) },
+  { "bucket sync checkpoint", CMD(OPT::BUCKET_SYNC_CHECKPOINT, false, true, false, false) },
+  { "bucket sync info", CMD(OPT::BUCKET_SYNC_INFO, false, true, false, false) },
+  { "bucket sync status", CMD(OPT::BUCKET_SYNC_STATUS, false, true, false, false) },
+  { "bucket sync markers", CMD(OPT::BUCKET_SYNC_MARKERS, false, true, false, false) },
+  { "bucket sync init", CMD(OPT::BUCKET_SYNC_INIT, false, false, false, false) },
+  { "bucket sync run", CMD(OPT::BUCKET_SYNC_RUN, false, false, true, false) },
+  { "bucket sync disable", CMD(OPT::BUCKET_SYNC_DISABLE, false, false, false, false) },
+  { "bucket sync enable", CMD(OPT::BUCKET_SYNC_ENABLE, false, false, false, false) },
+  { "bucket rm", CMD(OPT::BUCKET_RM, false, false, true, true) },
+  { "bucket rewrite", CMD(OPT::BUCKET_REWRITE, false, false, true, false) },
+  { "bucket reshard", CMD(OPT::BUCKET_RESHARD, false, false, false, false) },
+  { "bucket chown", CMD(OPT::BUCKET_CHOWN, false, false, false, true) },
+  { "bucket radoslist", CMD(OPT::BUCKET_RADOS_LIST, false, false, false, false) },
+  { "bucket rados list", CMD(OPT::BUCKET_RADOS_LIST, false, false, false, false) },
+  { "bucket shard objects", CMD(OPT::BUCKET_SHARD_OBJECTS, false, true, false, false) },
+  { "bucket shard object", CMD(OPT::BUCKET_SHARD_OBJECTS, false, true, false, false) },
+  { "bucket object shard", CMD(OPT::BUCKET_OBJECT_SHARD, false, true, false, false) },
+  { "policy", CMD(OPT::POLICY, false, false, false, false) },
+  { "pool add", CMD(OPT::POOL_ADD, false, false, false, false) },
+  { "pool rm", CMD(OPT::POOL_RM, false, false, false, false) },
+  { "pool list", CMD(OPT::POOLS_LIST, false, false, false, false) },
+  { "pools list", CMD(OPT::POOLS_LIST, false, false, false, false) },
+  { "log list", CMD(OPT::LOG_LIST, false, true, false, false) },
+  { "log show", CMD(OPT::LOG_SHOW, false, true, false, false) },
+  { "log rm", CMD(OPT::LOG_RM, false, false, false, false) },
+  { "usage show", CMD(OPT::USAGE_SHOW, false, true, false, false) },
+  { "usage trim", CMD(OPT::USAGE_TRIM, false, false, false, false) },
+  { "usage clear", CMD(OPT::USAGE_CLEAR, false, false, false, false) },
+  { "object put", CMD(OPT::OBJECT_PUT, false, false, false, false) },
+  { "object rm", CMD(OPT::OBJECT_RM, false, false, true, false) },
+  { "object unlink", CMD(OPT::OBJECT_UNLINK, false, false, false, false) },
+  { "object stat", CMD(OPT::OBJECT_STAT, false, true, false, false) },
+  { "object rewrite", CMD(OPT::OBJECT_REWRITE, false, false, true, false) },
+  { "objects expire", CMD(OPT::OBJECTS_EXPIRE, false, false, true, false) },
+  { "objects expire-stale list", CMD(OPT::OBJECTS_EXPIRE_STALE_LIST, false, false, false, false) },
+  { "objects expire-stale rm", CMD(OPT::OBJECTS_EXPIRE_STALE_RM, false, false, true, false) },
+  { "bi get", CMD(OPT::BI_GET, false, true, false, false) },
+  { "bi put", CMD(OPT::BI_PUT, false, false, false, false) },
+  { "bi list", CMD(OPT::BI_LIST, false, true, false, false) },
+  { "bi purge", CMD(OPT::BI_PURGE, false, false, false, false) },
+  { "olh get", CMD(OPT::OLH_GET, false, true, false, false) },
+  { "olh readlog", CMD(OPT::OLH_READLOG, false, true, false, false) },
+  { "quota set", CMD(OPT::QUOTA_SET, false, false, false, false) },
+  { "quota enable", CMD(OPT::QUOTA_ENABLE, false, false, false, false) },
+  { "quota disable", CMD(OPT::QUOTA_DISABLE, false, false, false, false) },
+  { "ratelimit get", CMD(OPT::RATELIMIT_GET, false, false, false, false) },
+  { "ratelimit set", CMD(OPT::RATELIMIT_SET, false, false, false, false) },
+  { "ratelimit enable", CMD(OPT::RATELIMIT_ENABLE, false, false, false, false) },
+  { "ratelimit disable", CMD(OPT::RATELIMIT_DISABLE, false, false, false, false) },
+  { "gc list", CMD(OPT::GC_LIST, false, true, true, false) },
+  { "gc process", CMD(OPT::GC_PROCESS, false, false, true, false) },
+  { "lc list", CMD(OPT::LC_LIST, false, true, false, false) },
+  { "lc get", CMD(OPT::LC_GET, false, false, false, false) },
+  { "lc process", CMD(OPT::LC_PROCESS, false, false, true, false) },
+  { "lc reshard fix", CMD(OPT::LC_RESHARD_FIX, false, false, false, false) },
+  { "orphans find", CMD(OPT::ORPHANS_FIND, false, false, false, false) },
+  { "orphans finish", CMD(OPT::ORPHANS_FINISH, false, false, false, false) },
+  { "orphans list jobs", CMD(OPT::ORPHANS_LIST_JOBS, false, true, false, false) },
+  { "orphans list-jobs", CMD(OPT::ORPHANS_LIST_JOBS, false, true, false, false) },
+  { "zonegroup add", CMD(OPT::ZONEGROUP_ADD, true, false, false, false) },
+  { "zonegroup create", CMD(OPT::ZONEGROUP_CREATE, true, false, false, false) },
+  { "zonegroup default", CMD(OPT::ZONEGROUP_DEFAULT, true, false, false, false) },
+  { "zonegroup delete", CMD(OPT::ZONEGROUP_DELETE, true, false, false, false) },
+  { "zonegroup get", CMD(OPT::ZONEGROUP_GET, true, true, false, false) },
+  { "zonegroup modify", CMD(OPT::ZONEGROUP_MODIFY, true, false, false, false) },
+  { "zonegroup set", CMD(OPT::ZONEGROUP_SET, true, false, false, false) },
+  { "zonegroup list", CMD(OPT::ZONEGROUP_LIST, true, true, false, false) },
+  { "zonegroups list", CMD(OPT::ZONEGROUP_LIST, true, true, false, false) },
+  { "zonegroup remove", CMD(OPT::ZONEGROUP_REMOVE, true, false, false, false) },
+  { "zonegroup remove zone", CMD(OPT::ZONEGROUP_REMOVE, true, false, false, false) },
+  { "zonegroup rename", CMD(OPT::ZONEGROUP_RENAME, true, false, false, false) },
+  { "zonegroup placement add", CMD(OPT::ZONEGROUP_PLACEMENT_ADD, true, false, false, false) },
+  { "zonegroup placement modify", CMD(OPT::ZONEGROUP_PLACEMENT_MODIFY, true, false, false, false) },
+  { "zonegroup placement rm", CMD(OPT::ZONEGROUP_PLACEMENT_RM, true, false, false, false) },
+  { "zonegroup placement list", CMD(OPT::ZONEGROUP_PLACEMENT_LIST, true, true, false, false) },
+  { "zonegroup placement get", CMD(OPT::ZONEGROUP_PLACEMENT_GET, true, true, false, false) },
+  { "zonegroup placement default", CMD(OPT::ZONEGROUP_PLACEMENT_DEFAULT, true, false, false, false) },
+  { "zone create", CMD(OPT::ZONE_CREATE, true, false, false, false) },
+  { "zone delete", CMD(OPT::ZONE_DELETE, true, false, false, false) },
+  { "zone get", CMD(OPT::ZONE_GET, true, true, false, false) },
+  { "zone modify", CMD(OPT::ZONE_MODIFY, true, false, false, false) },
+  { "zone set", CMD(OPT::ZONE_SET, true, false, false, false) },
+  { "zone list", CMD(OPT::ZONE_LIST, true, true, false, false) },
+  { "zones list", CMD(OPT::ZONE_LIST, true, true, false, false) },
+  { "zone rename", CMD(OPT::ZONE_RENAME, true, false, false, false) },
+  { "zone default", CMD(OPT::ZONE_DEFAULT, true, false, false, false) },
+  { "zone placement add", CMD(OPT::ZONE_PLACEMENT_ADD, true, false, false, false) },
+  { "zone placement modify", CMD(OPT::ZONE_PLACEMENT_MODIFY, true, false, false, false) },
+  { "zone placement rm", CMD(OPT::ZONE_PLACEMENT_RM, true, false, false, false) },
+  { "zone placement list", CMD(OPT::ZONE_PLACEMENT_LIST, true, true, false, false) },
+  { "zone placement get", CMD(OPT::ZONE_PLACEMENT_GET, true, true, false, false) },
+  { "caps add", CMD(OPT::CAPS_ADD, false, false, false, true) },
+  { "caps rm", CMD(OPT::CAPS_RM, false, false, false, true) },
+  { "metadata get [*]", CMD(OPT::METADATA_GET, false, true, false, false) },
+  { "metadata put [*]", CMD(OPT::METADATA_PUT, false, false, false, true) },
+  { "metadata rm [*]", CMD(OPT::METADATA_RM, false, false, false, true) },
+  { "metadata list [*]", CMD(OPT::METADATA_LIST, false, true, false, false) },
+  { "metadata sync status", CMD(OPT::METADATA_SYNC_STATUS, false, true, false, false) },
+  { "metadata sync init", CMD(OPT::METADATA_SYNC_INIT, false, false, false, false) },
+  { "metadata sync run", CMD(OPT::METADATA_SYNC_RUN, false, false, false, false) },
+  { "mdlog list", CMD(OPT::MDLOG_LIST, false, true, false, false) },
+  { "mdlog autotrim", CMD(OPT::MDLOG_AUTOTRIM, false, false, false, false) },
+  { "mdlog trim", CMD(OPT::MDLOG_TRIM, false, false, false, false) },
+  { "mdlog fetch", CMD(OPT::MDLOG_FETCH, false, false, false, false) },
+  { "mdlog status", CMD(OPT::MDLOG_STATUS, false, true, false, false) },
+  { "sync error list", CMD(OPT::SYNC_ERROR_LIST, false, true, false, false) },
+  { "sync error trim", CMD(OPT::SYNC_ERROR_TRIM, false, false, false, false) },
+  { "sync policy get", CMD(OPT::SYNC_POLICY_GET, false, true, false, false) },
+  { "sync group create", CMD(OPT::SYNC_GROUP_CREATE, false, false, false, false) },
+  { "sync group modify", CMD(OPT::SYNC_GROUP_MODIFY, false, false, false, false) },
+  { "sync group get", CMD(OPT::SYNC_GROUP_GET, false, true, false, false) },
+  { "sync group remove", CMD(OPT::SYNC_GROUP_REMOVE, false, false, false, false) },
+  { "sync group flow create", CMD(OPT::SYNC_GROUP_FLOW_CREATE, false, false, false, false) },
+  { "sync group flow remove", CMD(OPT::SYNC_GROUP_FLOW_REMOVE, false, false, false, false) },
+  { "sync group pipe create", CMD(OPT::SYNC_GROUP_PIPE_CREATE, false, false, false, false) },
+  { "sync group pipe modify", CMD(OPT::SYNC_GROUP_PIPE_MODIFY, false, false, false, false) },
+  { "sync group pipe remove", CMD(OPT::SYNC_GROUP_PIPE_REMOVE, false, false, false, false) },
+  { "bilog list", CMD(OPT::BILOG_LIST, false, true, false, false) },
+  { "bilog trim", CMD(OPT::BILOG_TRIM, false, false, false, false) },
+  { "bilog status", CMD(OPT::BILOG_STATUS, false, true, false, false) },
+  { "bilog autotrim", CMD(OPT::BILOG_AUTOTRIM, false, false, false, false) },
+  { "data sync status", CMD(OPT::DATA_SYNC_STATUS, false, true, false, false) },
+  { "data sync init", CMD(OPT::DATA_SYNC_INIT, false, false, false, false) },
+  { "data sync run", CMD(OPT::DATA_SYNC_RUN, false, false, true, false) },
+  { "datalog list", CMD(OPT::DATALOG_LIST, false, true, false, false) },
+  { "datalog status", CMD(OPT::DATALOG_STATUS, false, true, false, false) },
+  { "datalog autotrim", CMD(OPT::DATALOG_AUTOTRIM, false, false, false, false) },
+  { "datalog trim", CMD(OPT::DATALOG_TRIM, false, false, false, false) },
+  { "datalog type", CMD(OPT::DATALOG_TYPE, false, false, false, false) },
+  { "datalog prune", CMD(OPT::DATALOG_PRUNE, false, false, false, false) },
+  { "realm create", CMD(OPT::REALM_CREATE, true, false, false, false) },
+  { "realm rm", CMD(OPT::REALM_DELETE, true, false, false, false) },
+  { "realm get", CMD(OPT::REALM_GET, true, true, false, false) },
+  { "realm get default", CMD(OPT::REALM_GET_DEFAULT, true, true, false, false) },
+  { "realm get-default", CMD(OPT::REALM_GET_DEFAULT, true, true, false, false) },
+  { "realm list", CMD(OPT::REALM_LIST, true, true, false, false) },
+  { "realm list periods", CMD(OPT::REALM_LIST_PERIODS, true, true, false, false) },
+  { "realm list-periods", CMD(OPT::REALM_LIST_PERIODS, true, true, false, false) },
+  { "realm rename", CMD(OPT::REALM_RENAME, true, false, false, false) },
+  { "realm set", CMD(OPT::REALM_SET, true, false, false, false) },
+  { "realm default", CMD(OPT::REALM_DEFAULT, true, false, false, false) },
+  { "realm pull", CMD(OPT::REALM_PULL, true, false, false, false) },
+  { "period delete", CMD(OPT::PERIOD_DELETE, true, false, false, false) },
+  { "period get", CMD(OPT::PERIOD_GET, true, true, false, false) },
+  { "period get-current", CMD(OPT::PERIOD_GET_CURRENT, true, true, false, false) },
+  { "period get current", CMD(OPT::PERIOD_GET_CURRENT, true, true, false, false) },
+  { "period pull", CMD(OPT::PERIOD_PULL, false, false, false, false) },
+  { "period push", CMD(OPT::PERIOD_PUSH, false, false, false, false) },
+  { "period list", CMD(OPT::PERIOD_LIST, true, true, false, false) },
+  { "period update", CMD(OPT::PERIOD_UPDATE, false, false, false, false) },
+  { "period commit", CMD(OPT::PERIOD_COMMIT, false, false, false, false) },
+  { "global quota get", CMD(OPT::GLOBAL_QUOTA_GET, true, true, false, false) },
+  { "global quota set", CMD(OPT::GLOBAL_QUOTA_SET, true, false, false, false) },
+  { "global quota enable", CMD(OPT::GLOBAL_QUOTA_ENABLE, true, false, false, false) },
+  { "global quota disable", CMD(OPT::GLOBAL_QUOTA_DISABLE, true, false, false, false) },
+  { "global ratelimit get", CMD(OPT::GLOBAL_RATELIMIT_GET, true, true, false, false) },
+  { "global ratelimit set", CMD(OPT::GLOBAL_RATELIMIT_SET, true, false, false, false) },
+  { "global ratelimit enable", CMD(OPT::GLOBAL_RATELIMIT_ENABLE, true, false, false, false) },
+  { "global ratelimit disable", CMD(OPT::GLOBAL_RATELIMIT_DISABLE, true, false, false, false) },
+  { "sync info", CMD(OPT::SYNC_INFO, false, true, false, false) },
+  { "sync status", CMD(OPT::SYNC_STATUS, false, true, false, false) },
+  { "role create", CMD(OPT::ROLE_CREATE, false, false, false, true) },
+  { "role delete", CMD(OPT::ROLE_DELETE, false, false, false, true) },
+  { "role get", CMD(OPT::ROLE_GET, false, true, false, false) },
+  { "role-trust-policy modify", CMD(OPT::ROLE_TRUST_POLICY_MODIFY, false, false, false, false) },
+  { "role list", CMD(OPT::ROLE_LIST, false, true, false, false) },
+  { "role policy put", CMD(OPT::ROLE_POLICY_PUT, false, false, false, true) },
+  { "role-policy put", CMD(OPT::ROLE_POLICY_PUT, false, false, false, true) },
+  { "role policy list", CMD(OPT::ROLE_POLICY_LIST, false, true, false, false) },
+  { "role-policy list", CMD(OPT::ROLE_POLICY_LIST, false, true, false, false) },
+  { "role policy get", CMD(OPT::ROLE_POLICY_GET, false, true, false, false) },
+  { "role-policy get", CMD(OPT::ROLE_POLICY_GET, false, true, false, false) },
+  { "role policy delete", CMD(OPT::ROLE_POLICY_DELETE, false, false, false, true) },
+  { "role-policy delete", CMD(OPT::ROLE_POLICY_DELETE, false, false, false, true) },
+  { "role update", CMD(OPT::ROLE_UPDATE, false, false, false, false) },
+  { "reshard bucket", CMD(OPT::BUCKET_RESHARD, false, false, false, false) },
+  { "reshard add", CMD(OPT::RESHARD_ADD, false, false, false, false) },
+  { "reshard list", CMD(OPT::RESHARD_LIST, false, true, false, false) },
+  { "reshard status", CMD(OPT::RESHARD_STATUS, false, true, false, false) },
+  { "reshard process", CMD(OPT::RESHARD_PROCESS, false, false, false, false) },
+  { "reshard cancel", CMD(OPT::RESHARD_CANCEL, false, false, false, false) },
+  { "mfa create", CMD(OPT::MFA_CREATE, false, false, false, true) },
+  { "mfa remove", CMD(OPT::MFA_REMOVE, false, false, false, true) },
+  { "mfa get", CMD(OPT::MFA_GET, false, false, false, false) },
+  { "mfa list", CMD(OPT::MFA_LIST, false, false, false, false) },
+  { "mfa check", CMD(OPT::MFA_CHECK, false, false, false, false) },
+  { "mfa resync", CMD(OPT::MFA_RESYNC, false, false, false, true) },
+  { "reshard stale-instances list", CMD(OPT::RESHARD_STALE_INSTANCES_LIST, false, false, false, false) },
+  { "reshard stale list", CMD(OPT::RESHARD_STALE_INSTANCES_LIST, false, false, false, false) },
+  { "reshard stale-instances delete", CMD(OPT::RESHARD_STALE_INSTANCES_DELETE, false, false, false, false) },
+  { "reshard stale delete", CMD(OPT::RESHARD_STALE_INSTANCES_DELETE, false, false, false, false) },
+  { "topic list", CMD(OPT::PUBSUB_TOPICS_LIST, false, true, false, false) },
+  { "topic get", CMD(OPT::PUBSUB_TOPIC_GET, false, true, false, false) },
+  { "topic rm", CMD(OPT::PUBSUB_TOPIC_RM, false, false, false, false) },
+  { "subscription get", CMD(OPT::PUBSUB_SUB_GET, false, true, false, false) },
+  { "subscription rm", CMD(OPT::PUBSUB_SUB_RM, false, false, false, false) },
+  { "subscription pull", CMD(OPT::PUBSUB_SUB_PULL, false, true, false, false) },
+  { "subscription ack", CMD(OPT::PUBSUB_EVENT_RM, false, false, false, false) },
+  { "script put", CMD(OPT::SCRIPT_PUT, false, false, false, false) },
+  { "script get", CMD(OPT::SCRIPT_GET, false, true, false, false) },
+  { "script rm", CMD(OPT::SCRIPT_RM, false, false, false, false) },
+  { "script-package add", CMD(OPT::SCRIPT_PACKAGE_ADD, false, false, false, false) },
+  { "script-package rm", CMD(OPT::SCRIPT_PACKAGE_RM, false, false, false, false) },
+  { "script-package list", CMD(OPT::SCRIPT_PACKAGE_LIST, false, false, false, false) },
 };
 
 static SimpleCmd::Aliases cmd_aliases = {
@@ -3510,7 +3380,7 @@ int main(int argc, const char **argv)
   std::unique_ptr<rgw::sal::Bucket> bucket;
   uint32_t perm_mask = 0;
   RGWUserInfo info;
-  OPT opt_cmd = OPT::NO_CMD;
+  CMD opt_cmd;
   int gen_access_key = 0;
   int gen_secret_key = 0;
   bool set_perm = false;
@@ -4229,7 +4099,7 @@ int main(int argc, const char **argv)
       exit(1);
     }
 
-    opt_cmd = std::any_cast<OPT>(_opt_cmd);
+    opt_cmd = std::any_cast<CMD>(_opt_cmd);
 
     /* some commands may have an optional extra param */
     if (!extra_args.empty()) {
@@ -4250,123 +4120,9 @@ int main(int argc, const char **argv)
     // not a raw op if 'period pull' needs to read zone/period configuration
     bool raw_period_pull = opt_cmd == OPT::PERIOD_PULL && !url.empty();
 
-    std::set<OPT> raw_storage_ops_list = {OPT::ZONEGROUP_ADD, OPT::ZONEGROUP_CREATE,
-			 OPT::ZONEGROUP_DELETE,
-			 OPT::ZONEGROUP_GET, OPT::ZONEGROUP_LIST,
-			 OPT::ZONEGROUP_SET, OPT::ZONEGROUP_DEFAULT,
-			 OPT::ZONEGROUP_RENAME, OPT::ZONEGROUP_MODIFY,
-			 OPT::ZONEGROUP_REMOVE,
-			 OPT::ZONEGROUP_PLACEMENT_ADD, OPT::ZONEGROUP_PLACEMENT_RM,
-			 OPT::ZONEGROUP_PLACEMENT_MODIFY, OPT::ZONEGROUP_PLACEMENT_LIST,
-			 OPT::ZONEGROUP_PLACEMENT_GET,
-			 OPT::ZONEGROUP_PLACEMENT_DEFAULT,
-			 OPT::ZONE_CREATE, OPT::ZONE_DELETE,
-			 OPT::ZONE_GET, OPT::ZONE_SET, OPT::ZONE_RENAME,
-			 OPT::ZONE_LIST, OPT::ZONE_MODIFY, OPT::ZONE_DEFAULT,
-			 OPT::ZONE_PLACEMENT_ADD, OPT::ZONE_PLACEMENT_RM,
-			 OPT::ZONE_PLACEMENT_MODIFY, OPT::ZONE_PLACEMENT_LIST,
-			 OPT::ZONE_PLACEMENT_GET,
-			 OPT::REALM_CREATE,
-			 OPT::PERIOD_DELETE, OPT::PERIOD_GET,
-			 OPT::PERIOD_GET_CURRENT, OPT::PERIOD_LIST,
-			 OPT::GLOBAL_QUOTA_GET, OPT::GLOBAL_QUOTA_SET,
-			 OPT::GLOBAL_QUOTA_ENABLE, OPT::GLOBAL_QUOTA_DISABLE,
-       OPT::GLOBAL_RATELIMIT_GET, OPT::GLOBAL_RATELIMIT_SET,
-			 OPT::GLOBAL_RATELIMIT_ENABLE, OPT::GLOBAL_RATELIMIT_DISABLE,
-			 OPT::REALM_DELETE, OPT::REALM_GET, OPT::REALM_LIST,
-			 OPT::REALM_LIST_PERIODS,
-			 OPT::REALM_GET_DEFAULT,
-			 OPT::REALM_RENAME, OPT::REALM_SET,
-			 OPT::REALM_DEFAULT, OPT::REALM_PULL};
-
-    std::set<OPT> readonly_ops_list = {
-                         OPT::USER_INFO,
-			 OPT::USER_STATS,
-			 OPT::BUCKETS_LIST,
-			 OPT::BUCKET_LIMIT_CHECK,
-			 OPT::BUCKET_LAYOUT,
-			 OPT::BUCKET_STATS,
-			 OPT::BUCKET_SYNC_CHECKPOINT,
-			 OPT::BUCKET_SYNC_INFO,
-			 OPT::BUCKET_SYNC_STATUS,
-			 OPT::BUCKET_SYNC_MARKERS,
-			 OPT::BUCKET_SHARD_OBJECTS,
-			 OPT::BUCKET_OBJECT_SHARD,
-			 OPT::LOG_LIST,
-			 OPT::LOG_SHOW,
-			 OPT::USAGE_SHOW,
-			 OPT::OBJECT_STAT,
-			 OPT::BI_GET,
-			 OPT::BI_LIST,
-			 OPT::OLH_GET,
-			 OPT::OLH_READLOG,
-			 OPT::GC_LIST,
-			 OPT::LC_LIST,
-			 OPT::ORPHANS_LIST_JOBS,
-			 OPT::ZONEGROUP_GET,
-			 OPT::ZONEGROUP_LIST,
-			 OPT::ZONEGROUP_PLACEMENT_LIST,
-			 OPT::ZONEGROUP_PLACEMENT_GET,
-			 OPT::ZONE_GET,
-			 OPT::ZONE_LIST,
-			 OPT::ZONE_PLACEMENT_LIST,
-			 OPT::ZONE_PLACEMENT_GET,
-			 OPT::METADATA_GET,
-			 OPT::METADATA_LIST,
-			 OPT::METADATA_SYNC_STATUS,
-			 OPT::MDLOG_LIST,
-			 OPT::MDLOG_STATUS,
-			 OPT::SYNC_ERROR_LIST,
-			 OPT::SYNC_GROUP_GET,
-			 OPT::SYNC_POLICY_GET,
-			 OPT::BILOG_LIST,
-			 OPT::BILOG_STATUS,
-			 OPT::DATA_SYNC_STATUS,
-			 OPT::DATALOG_LIST,
-			 OPT::DATALOG_STATUS,
-			 OPT::REALM_GET,
-			 OPT::REALM_GET_DEFAULT,
-			 OPT::REALM_LIST,
-			 OPT::REALM_LIST_PERIODS,
-			 OPT::PERIOD_GET,
-			 OPT::PERIOD_GET_CURRENT,
-			 OPT::PERIOD_LIST,
-			 OPT::GLOBAL_QUOTA_GET,
-       OPT::GLOBAL_RATELIMIT_GET,
-			 OPT::SYNC_INFO,
-			 OPT::SYNC_STATUS,
-			 OPT::ROLE_GET,
-			 OPT::ROLE_LIST,
-			 OPT::ROLE_POLICY_LIST,
-			 OPT::ROLE_POLICY_GET,
-			 OPT::RESHARD_LIST,
-			 OPT::RESHARD_STATUS,
-			 OPT::PUBSUB_TOPICS_LIST,
-			 OPT::PUBSUB_TOPIC_GET,
-			 OPT::PUBSUB_SUB_GET,
-			 OPT::PUBSUB_SUB_PULL,
-			 OPT::SCRIPT_GET,
-    };
-
-    std::set<OPT> gc_ops_list = {
-			 OPT::GC_LIST,
-			 OPT::GC_PROCESS,
-			 OPT::OBJECT_RM,
-			 OPT::BUCKET_RM,  // --purge-objects
-			 OPT::USER_RM,    // --purge-data
-			 OPT::OBJECTS_EXPIRE,
-			 OPT::OBJECTS_EXPIRE_STALE_RM,
-			 OPT::LC_PROCESS,
-       OPT::BUCKET_SYNC_RUN,
-       OPT::DATA_SYNC_RUN,
-       OPT::BUCKET_REWRITE,
-       OPT::OBJECT_REWRITE
-    };
-
-    raw_storage_op = (raw_storage_ops_list.find(opt_cmd) != raw_storage_ops_list.end() ||
-			   raw_period_update || raw_period_pull);
-    bool need_cache = readonly_ops_list.find(opt_cmd) == readonly_ops_list.end();
-    bool need_gc = (gc_ops_list.find(opt_cmd) != gc_ops_list.end()) && !bypass_gc;
+    raw_storage_op = opt_cmd.raw_storage || raw_period_update || raw_period_pull;
+    bool need_cache = !opt_cmd.read_only;
+    bool need_gc = opt_cmd.gc && !bypass_gc;
 
     StoreManager::Config cfg = StoreManager::get_config(true, g_ceph_context);
 
