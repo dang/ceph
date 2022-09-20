@@ -35,7 +35,6 @@ extern "C" {
 #include "include/str_list.h"
 
 #include "rgw_admin.h"
-#include "rgw_user.h"
 #include "rgw_bucket.h"
 #include "rgw_otp.h"
 #include "rgw_rados.h"
@@ -3339,6 +3338,7 @@ int main(int argc, const char **argv)
     g_conf().set_val_or_die("rgw_zonegroup", g_conf()->rgw_region.c_str());
   }
 
+  CMD opt_cmd;
   std::unique_ptr<AdminStore> admin_cfg;
   AdminArgs admin_args;
   rgw_user user_id_arg;
@@ -3356,40 +3356,22 @@ int main(int argc, const char **argv)
   int tmp_int;
   int is_master_int;
   int read_only_int;
-  bool read_only = false;
-  int is_read_only_set = false;
-  int commit = false;
-  int staging = false;
-  int key_type = KEY_TYPE_UNDEFINED;
   std::unique_ptr<rgw::sal::Bucket> bucket;
   uint32_t perm_mask = 0;
-  RGWUserInfo info;
-  CMD opt_cmd;
   int gen_access_key = 0;
   int gen_secret_key = 0;
   bool set_perm = false;
   bool set_temp_url_key = false;
   map<int, string> temp_url_keys;
-  string bucket_id;
-  string new_bucket_name;
-  std::unique_ptr<Formatter> zone_formatter;
   int purge_data = false;
   int pretty_format = false;
-  int show_log_entries = true;
-  int show_log_sum = true;
-  int skip_zero_entries = false;  // log show
   int purge_keys = false;
   int delete_child_objects = false;
-  int fix = false;
-  int remove_bad = false;
-  int check_head_obj_locator = false;
   int max_buckets = -1;
   bool max_buckets_specified = false;
-  map<string, bool> categories;
   string caps;
   int check_objects = false;
   RGWBucketAdminOpState bucket_op;
-  string infile;
   string metadata_key;
   RGWObjVersionTracker objv_tracker;
   string marker;
@@ -3583,9 +3565,9 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--key-type", (char*)NULL)) {
       key_type_str = val;
       if (key_type_str.compare("swift") == 0) {
-        key_type = KEY_TYPE_SWIFT;
+        admin_args.key_type = KEY_TYPE_SWIFT;
       } else if (key_type_str.compare("s3") == 0) {
-        key_type = KEY_TYPE_S3;
+        admin_args.key_type = KEY_TYPE_S3;
       } else {
         cerr << "bad key type: " << key_type_str << std::endl;
         exit(1);
@@ -3596,11 +3578,11 @@ int main(int argc, const char **argv)
       // do nothing
     } else if (ceph_argparse_binary_flag(args, i, &gen_secret_key, NULL, "--gen-secret", (char*)NULL)) {
       // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &show_log_entries, NULL, "--show-log-entries", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.show_log_entries, NULL, "--show-log-entries", (char*)NULL)) {
       // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &show_log_sum, NULL, "--show-log-sum", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.show_log_sum, NULL, "--show-log-sum", (char*)NULL)) {
       // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &skip_zero_entries, NULL, "--skip-zero-entries", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.skip_zero_entries, NULL, "--skip-zero-entries", (char*)NULL)) {
       // do nothing
     } else if (ceph_argparse_binary_flag(args, i, &admin, NULL, "--admin", (char*)NULL)) {
       admin_specified = true;
@@ -3608,9 +3590,9 @@ int main(int argc, const char **argv)
       system_specified = true;
     } else if (ceph_argparse_binary_flag(args, i, &verbose, NULL, "--verbose", (char*)NULL)) {
       // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &staging, NULL, "--staging", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.staging, NULL, "--staging", (char*)NULL)) {
       // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &commit, NULL, "--commit", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.commit, NULL, "--commit", (char*)NULL)) {
       // do nothing
     } else if (ceph_argparse_witharg(args, i, &val, "--min-rewrite-size", (char*)NULL)) {
       min_rewrite_size = (uint64_t)atoll(val.c_str());
@@ -3731,14 +3713,14 @@ int main(int argc, const char **argv)
       temp_url_keys[1] = val;
       set_temp_url_key = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--bucket-id", (char*)NULL)) {
-      bucket_id = val;
+      admin_args.bucket_id = val;
       opt_bucket_id = val;
-      if (bucket_id.empty()) {
+      if (admin_args.bucket_id.empty()) {
         cerr << "no value for bucket-id" << std::endl;
         exit(1);
       }
     } else if (ceph_argparse_witharg(args, i, &val, "--bucket-new-name", (char*)NULL)) {
-      new_bucket_name = val;
+      admin_args.new_bucket_name = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--format", (char*)NULL)) {
       admin_args.format = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--categories", (char*)NULL)) {
@@ -3747,7 +3729,7 @@ int main(int argc, const char **argv)
       list<string>::iterator iter;
       get_str_list(cat_str, cat_list);
       for (iter = cat_list.begin(); iter != cat_list.end(); ++iter) {
-	categories[*iter] = true;
+	admin_args.categories[*iter] = true;
       }
     } else if (ceph_argparse_binary_flag(args, i, &delete_child_objects, NULL, "--purge-objects", (char*)NULL)) {
       // do nothing
@@ -3759,11 +3741,11 @@ int main(int argc, const char **argv)
       // do nothing
     } else if (ceph_argparse_binary_flag(args, i, &admin_args.yes_i_really_mean_it, NULL, "--yes-i-really-mean-it", (char*)NULL)) {
       // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &fix, NULL, "--fix", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.fix, NULL, "--fix", (char*)NULL)) {
       // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &remove_bad, NULL, "--remove-bad", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.remove_bad, NULL, "--remove-bad", (char*)NULL)) {
       // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &check_head_obj_locator, NULL, "--check-head-obj-locator", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.check_head_obj_locator, NULL, "--check-head-obj-locator", (char*)NULL)) {
       // do nothing
     } else if (ceph_argparse_binary_flag(args, i, &check_objects, NULL, "--check-objects", (char*)NULL)) {
      // do nothing
@@ -3786,7 +3768,7 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--caps", (char*)NULL)) {
       caps = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--infile", (char*)NULL)) {
-      infile = val;
+      admin_args.infile = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--metadata-key", (char*)NULL)) {
       metadata_key = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--marker", (char*)NULL)) {
@@ -3821,8 +3803,7 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--redirect-zone", (char*)NULL)) {
       admin_args.opt_redirect_zone = val;
     } else if (ceph_argparse_binary_flag(args, i, &read_only_int, NULL, "--read-only", (char*)NULL)) {
-      read_only = (bool)read_only_int;
-      is_read_only_set = true;
+      admin_args.opt_read_only = (bool)read_only_int;
     } else if (ceph_argparse_witharg(args, i, &val, "--master-zone", (char*)NULL)) {
       master_zone = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--period", (char*)NULL)) {
@@ -4100,7 +4081,7 @@ int main(int argc, const char **argv)
     }
 
     // not a raw op if 'period update' needs to commit to master
-    bool raw_period_update = opt_cmd == OPT::PERIOD_UPDATE && !commit;
+    bool raw_period_update = opt_cmd == OPT::PERIOD_UPDATE && !admin_args.commit;
     // not a raw op if 'period pull' needs to read zone/period configuration
     bool raw_period_pull = opt_cmd == OPT::PERIOD_PULL && !admin_args.url.empty();
 
@@ -4196,7 +4177,7 @@ int main(int argc, const char **argv)
     exit(1);
   }
 
-  zone_formatter = std::make_unique<JSONFormatter_PrettyZone>(pretty_format);
+  admin_args.zone_formatter = std::make_unique<JSONFormatter_PrettyZone>(pretty_format);
 
   admin_args.realm_name = g_conf()->rgw_realm;
   admin_args.zone_name = g_conf()->rgw_zone;
@@ -4279,7 +4260,7 @@ int main(int argc, const char **argv)
 	if (!admin_args.period_epoch.empty()) {
 	  epoch = atoi(admin_args.period_epoch.c_str());
 	}
-        if (staging) {
+        if (admin_args.staging) {
           RGWRealm realm(admin_args.realm_id, admin_args.realm_name);
           int ret = realm.init(dpp(), g_ceph_context, static_cast<rgw::sal::RadosStore*>(store)->svc()->sysobj, null_yield);
           if (ret < 0 ) {
@@ -4331,7 +4312,7 @@ int main(int argc, const char **argv)
     case OPT::PERIOD_UPDATE:
       {
         int ret = update_period(admin_args.realm_id, admin_args.realm_name, admin_args.period_id, admin_args.period_epoch,
-                                commit, admin_args.remote, admin_args.url, admin_args.opt_region,
+                                admin_args.commit, admin_args.remote, admin_args.url, admin_args.opt_region,
                                 admin_args.access_key, admin_args.secret_key,
                                 admin_args.formatter.get(), admin_args.yes_i_really_mean_it);
 	if (ret < 0) {
@@ -4713,7 +4694,7 @@ int main(int argc, const char **argv)
 	} else if (ret == -ENOENT) {
 	  new_realm = true;
 	}
-	ret = read_decode_json(infile, realm);
+	ret = read_decode_json(admin_args.infile, realm);
 	if (ret < 0) {
 	  return 1;
 	}
@@ -4888,7 +4869,7 @@ int main(int argc, const char **argv)
 
         ret = zonegroup.add_zone(dpp(), zone,
                                  safe_opt_ptr(admin_args.opt_is_master),
-                                 (is_read_only_set ? &read_only : NULL),
+                                 safe_opt_ptr(admin_args.opt_read_only),
                                  admin_args.endpoints, ptier_type,
                                  psync_from_all, admin_args.sync_from, admin_args.sync_from_rm,
                                  predirect_zone, bucket_index_max_shards,
@@ -5139,7 +5120,7 @@ int main(int argc, const char **argv)
 	  cerr << "failed to init zonegroup: " << cpp_strerror(-ret) << std::endl;
 	  return -ret;
 	}
-	ret = read_decode_json(infile, zonegroup);
+	ret = read_decode_json(admin_args.infile, zonegroup);
 	if (ret < 0) {
 	  return 1;
 	}
@@ -5486,7 +5467,7 @@ int main(int argc, const char **argv)
 
 	  ret = zonegroup.add_zone(dpp(), zone,
                                    safe_opt_ptr(admin_args.opt_is_master),
-                                   (is_read_only_set ? &read_only : NULL),
+                                   safe_opt_ptr(admin_args.opt_read_only),
                                    admin_args.endpoints,
                                    ptier_type,
                                    psync_from_all,
@@ -5601,7 +5582,7 @@ int main(int argc, const char **argv)
 
         string orig_id = zone.get_id();
 
-	ret = read_decode_json(infile, zone);
+	ret = read_decode_json(admin_args.infile, zone);
 	if (ret < 0) {
 	  return 1;
 	}
@@ -5768,7 +5749,7 @@ int main(int argc, const char **argv)
 
         ret = zonegroup.add_zone(dpp(), zone,
                                  safe_opt_ptr(admin_args.opt_is_master),
-                                 (is_read_only_set ? &read_only : NULL),
+                                 safe_opt_ptr(admin_args.opt_read_only),
                                  admin_args.endpoints, ptier_type,
                                  psync_from_all, admin_args.sync_from, admin_args.sync_from_rm,
                                  predirect_zone, bucket_index_max_shards,
@@ -6081,8 +6062,8 @@ int main(int argc, const char **argv)
     user_op.set_op_mask(op_mask);
   }
 
-  if (key_type != KEY_TYPE_UNDEFINED)
-    user_op.set_key_type(key_type);
+  if (admin_args.key_type != KEY_TYPE_UNDEFINED)
+    user_op.set_key_type(admin_args.key_type);
 
   // set suspension operation parameters
   if (opt_cmd == OPT::USER_ENABLE)
@@ -6121,7 +6102,7 @@ int main(int argc, const char **argv)
   bucket_op.set_object(admin_args.object);
   bucket_op.set_check_objects(check_objects);
   bucket_op.set_delete_children(delete_child_objects);
-  bucket_op.set_fix_index(fix);
+  bucket_op.set_fix_index(admin_args.fix);
   bucket_op.set_max_aio(admin_args.max_concurrent_ios);
 
   // required to gather errors from operations
@@ -6287,7 +6268,7 @@ int main(int argc, const char **argv)
   case OPT::PERIOD_UPDATE:
     {
       int ret = update_period(admin_args.realm_id, admin_args.realm_name, admin_args.period_id, admin_args.period_epoch,
-                              commit, admin_args.remote, admin_args.url, admin_args.opt_region,
+                              admin_args.commit, admin_args.remote, admin_args.url, admin_args.opt_region,
                               admin_args.access_key, admin_args.secret_key,
                               admin_args.formatter.get(), admin_args.yes_i_really_mean_it);
       if (ret < 0) {
@@ -6430,14 +6411,14 @@ int main(int argc, const char **argv)
         return -EINVAL;
       }
 
-      if (admin_args.perm_policy_doc.empty() && infile.empty()) {
+      if (admin_args.perm_policy_doc.empty() && admin_args.infile.empty()) {
         cerr << "permission policy document is empty" << std::endl;
         return -EINVAL;
       }
 
       bufferlist bl;
-      if (!infile.empty()) {
-        int ret = read_input(infile, bl);
+      if (!admin_args.infile.empty()) {
+        int ret = read_input(admin_args.infile, bl);
         if (ret < 0) {
           cerr << "ERROR: failed to read input policy document: " << cpp_strerror(-ret) << std::endl;
           return -ret;
@@ -6563,6 +6544,7 @@ int main(int argc, const char **argv)
 
   // output the result of a user operation
   if (output_user_info) {
+    RGWUserInfo info;
     ret = ruser.info(info, &err_msg);
     if (ret < 0) {
       cerr << "could not fetch user info: " << err_msg << std::endl;
@@ -6642,7 +6624,7 @@ int main(int argc, const char **argv)
       }
       RGWBucketAdminOp::info(store, bucket_op, stream_flusher, null_yield, dpp());
     } else {
-      int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+      int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
       if (ret < 0) {
         cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
         return -ret;
@@ -6701,7 +6683,7 @@ int main(int argc, const char **argv)
       cerr << "ERROR: bucket not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       return -ret;
     }
@@ -6713,9 +6695,9 @@ int main(int argc, const char **argv)
   }
 
   if (opt_cmd == OPT::BUCKET_STATS) {
-    if (admin_args.bucket_name.empty() && !bucket_id.empty()) {
+    if (admin_args.bucket_name.empty() && !admin_args.bucket_id.empty()) {
       rgw_bucket bucket;
-      if (!rgw_find_bucket_by_id(dpp(), store->ctx(), store, marker, bucket_id, &bucket)) {
+      if (!rgw_find_bucket_by_id(dpp(), store->ctx(), store, marker, admin_args.bucket_id, &bucket)) {
         cerr << "failure: no such bucket id" << std::endl;
         return -ENOENT;
       }
@@ -6732,8 +6714,8 @@ int main(int argc, const char **argv)
   }
 
   if (opt_cmd == OPT::BUCKET_LINK) {
-    bucket_op.set_bucket_id(bucket_id);
-    bucket_op.set_new_bucket_name(new_bucket_name);
+    bucket_op.set_bucket_id(admin_args.bucket_id);
+    bucket_op.set_new_bucket_name(admin_args.new_bucket_name);
     string err;
     int r = RGWBucketAdminOp::link(store, bucket_op, dpp(), &err);
     if (r < 0) {
@@ -6815,7 +6797,7 @@ int main(int argc, const char **argv)
     }
 
     bucket_op.set_bucket_name(admin_args.bucket_name);
-    bucket_op.set_new_bucket_name(new_bucket_name);
+    bucket_op.set_new_bucket_name(admin_args.new_bucket_name);
     string err;
 
     int r = RGWBucketAdminOp::chown(store, bucket_op, marker, dpp(), &err);
@@ -6861,7 +6843,7 @@ int main(int argc, const char **argv)
   }
 
   if (opt_cmd == OPT::LOG_SHOW || opt_cmd == OPT::LOG_RM) {
-    if (admin_args.object.empty() && (admin_args.date.empty() || admin_args.bucket_name.empty() || bucket_id.empty())) {
+    if (admin_args.object.empty() && (admin_args.date.empty() || admin_args.bucket_name.empty() || admin_args.bucket_id.empty())) {
       cerr << "specify an object or a date, bucket and bucket-id" << std::endl;
       exit(1);
     }
@@ -6872,7 +6854,7 @@ int main(int argc, const char **argv)
     } else {
       oid = admin_args.date;
       oid += "-";
-      oid += bucket_id;
+      oid += admin_args.bucket_id;
       oid += "-";
       oid += admin_args.bucket_name;
     }
@@ -6906,7 +6888,7 @@ int main(int argc, const char **argv)
       uint64_t agg_bytes_received = 0;
       uint64_t total_entries = 0;
 
-      if (show_log_entries)
+      if (admin_args.show_log_entries)
         admin_args.formatter->open_array_section("log_entries");
 
       do {
@@ -6918,11 +6900,11 @@ int main(int argc, const char **argv)
         agg_bytes_received += entry.bytes_received;
         total_entries++;
 
-        if (skip_zero_entries && entry.bytes_sent == 0 &&
+        if (admin_args.skip_zero_entries && entry.bytes_sent == 0 &&
             entry.bytes_received == 0)
           goto next;
 
-        if (show_log_entries) {
+        if (admin_args.show_log_entries) {
 
 	  rgw_format_ops_log_entry(entry, admin_args.formatter.get());
 	  admin_args.formatter->flush(cout);
@@ -6935,10 +6917,10 @@ next:
       	cerr << "error reading log " << oid << ": " << cpp_strerror(-r) << std::endl;
 	return -r;
       }
-      if (show_log_entries)
+      if (admin_args.show_log_entries)
         admin_args.formatter->close_section();
 
-      if (show_log_sum) {
+      if (admin_args.show_log_sum) {
         admin_args.formatter->open_object_section("log_sum");
 	admin_args.formatter->dump_int("bytes_sent", agg_bytes_sent);
 	admin_args.formatter->dump_int("bytes_received", agg_bytes_received);
@@ -6982,14 +6964,14 @@ next:
 
 
     if (!admin_args.bucket_name.empty()) {
-      int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+      int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
       if (ret < 0) {
 	cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
 	return -ret;
       }
     }
     ret = RGWUsage::show(dpp(), store, admin_args.user.get(), bucket.get(), start_epoch,
-			 end_epoch, show_log_entries, show_log_sum, &categories,
+			 end_epoch, admin_args.show_log_entries, admin_args.show_log_sum, &admin_args.categories,
 			 stream_flusher);
     if (ret < 0) {
       cerr << "ERROR: failed to show usage" << std::endl;
@@ -7026,7 +7008,7 @@ next:
     }
 
     if (!admin_args.bucket_name.empty()) {
-      int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+      int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
       if (ret < 0) {
 	cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
 	return -ret;
@@ -7065,7 +7047,7 @@ next:
   }
 
   if (opt_cmd == OPT::OLH_GET) {
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7082,7 +7064,7 @@ next:
   }
 
   if (opt_cmd == OPT::OLH_READLOG) {
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7120,7 +7102,7 @@ next:
       cerr << "ERROR: object not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7147,7 +7129,7 @@ next:
       cerr << "ERROR: bucket name not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7155,7 +7137,7 @@ next:
 
     rgw_cls_bi_entry entry;
     cls_rgw_obj_key key;
-    ret = read_decode_json(infile, entry, &key);
+    ret = read_decode_json(admin_args.infile, entry, &key);
     if (ret < 0) {
       return 1;
     }
@@ -7174,7 +7156,7 @@ next:
       cerr << "ERROR: bucket name not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7233,7 +7215,7 @@ next:
       cerr << "ERROR: bucket name not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7292,7 +7274,7 @@ next:
     RGWDataAccess::BucketRef b;
     RGWDataAccess::ObjectRef obj;
 
-    int ret = data_access.get_bucket(dpp(), admin_args.tenant, admin_args.bucket_name, bucket_id, &b, null_yield);
+    int ret = data_access.get_bucket(dpp(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &b, null_yield);
     if (ret < 0) {
       cerr << "ERROR: failed to init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7305,7 +7287,7 @@ next:
     }
 
     bufferlist bl;
-    ret = read_input(infile, bl);
+    ret = read_input(admin_args.infile, bl);
     if (ret < 0) {
       cerr << "ERROR: failed to read input: " << cpp_strerror(-ret) << std::endl;
     }
@@ -7318,7 +7300,7 @@ next:
   }
 
   if (opt_cmd == OPT::OBJECT_RM) {
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7342,7 +7324,7 @@ next:
       return EINVAL;
     }
 
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7397,7 +7379,7 @@ next:
       return EINVAL;
     }
 
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7511,7 +7493,7 @@ next:
     int ret = check_reshard_bucket_params(store,
 					  admin_args.bucket_name,
 					  admin_args.tenant,
-					  bucket_id,
+					  admin_args.bucket_id,
 					  admin_args.num_shards_specified,
 					  admin_args.num_shards,
 					  admin_args.yes_i_really_mean_it,
@@ -7562,7 +7544,7 @@ next:
     int ret = check_reshard_bucket_params(store,
 					  admin_args.bucket_name,
 					  admin_args.tenant,
-					  bucket_id,
+					  admin_args.bucket_id,
 					  admin_args.num_shards_specified,
 					  admin_args.num_shards,
 					  admin_args.yes_i_really_mean_it,
@@ -7635,7 +7617,7 @@ next:
       return EINVAL;
     }
 
-    ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7672,7 +7654,7 @@ next:
     }
 
     bool bucket_initable = true;
-    ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       if (admin_args.yes_i_really_mean_it) {
         bucket_initable = false;
@@ -7734,7 +7716,7 @@ next:
   } // OPT_RESHARD_CANCEL
 
   if (opt_cmd == OPT::OBJECT_UNLINK) {
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7754,7 +7736,7 @@ next:
   }
 
   if (opt_cmd == OPT::OBJECT_STAT) {
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7804,12 +7786,12 @@ next:
   }
 
   if (opt_cmd == OPT::BUCKET_CHECK) {
-    if (check_head_obj_locator) {
+    if (admin_args.check_head_obj_locator) {
       if (admin_args.bucket_name.empty()) {
         cerr << "ERROR: need to specify bucket name" << std::endl;
         return EINVAL;
       }
-      do_check_object_locator(admin_args.tenant, admin_args.bucket_name, fix, remove_bad, admin_args.formatter.get());
+      do_check_object_locator(admin_args.tenant, admin_args.bucket_name, admin_args.fix, admin_args.remove_bad, admin_args.formatter.get());
     } else {
       RGWBucketAdminOp::check_index(store, bucket_op, stream_flusher, null_yield, dpp());
     }
@@ -7920,7 +7902,7 @@ next:
     }
 
     RGWLifecycleConfiguration config;
-    ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -7945,8 +7927,8 @@ next:
 
   if (opt_cmd == OPT::LC_PROCESS) {
     if ((! admin_args.bucket_name.empty()) ||
-	(! bucket_id.empty())) {
-        int ret = init_bucket(nullptr, admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+	(! admin_args.bucket_id.empty())) {
+        int ret = init_bucket(nullptr, admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
 	if (ret < 0) {
 	  cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret)
 	       << std::endl;
@@ -7971,7 +7953,7 @@ next:
   }
 
   if (opt_cmd == OPT::USER_CHECK) {
-    check_bad_user_bucket_mapping(store, admin_args.user.get(), fix, null_yield, dpp());
+    check_bad_user_bucket_mapping(store, admin_args.user.get(), admin_args.fix, null_yield, dpp());
   }
 
   if (opt_cmd == OPT::USER_STATS) {
@@ -8000,7 +7982,7 @@ next:
 
     if (sync_stats) {
       if (!admin_args.bucket_name.empty()) {
-        int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+        int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
         if (ret < 0) {
           cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
           return -ret;
@@ -8059,7 +8041,7 @@ next:
 
   if (opt_cmd == OPT::METADATA_PUT) {
     bufferlist bl;
-    int ret = read_input(infile, bl);
+    int ret = read_input(admin_args.infile, bl);
     if (ret < 0) {
       cerr << "ERROR: failed to read input: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -8302,7 +8284,7 @@ next:
   }
 
   if (opt_cmd == OPT::SYNC_INFO) {
-    sync_info(opt_effective_zone_id, opt_bucket, zone_formatter.get());
+    sync_info(opt_effective_zone_id, opt_bucket, admin_args.zone_formatter.get());
   }
 
   if (opt_cmd == OPT::SYNC_STATUS) {
@@ -8513,7 +8495,7 @@ next:
       cerr << "ERROR: bucket not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket_for_sync(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket_for_sync(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       return -ret;
     }
@@ -8552,7 +8534,7 @@ next:
       cerr << "ERROR: bucket not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       return -ret;
     }
@@ -8604,7 +8586,7 @@ next:
       cerr << "ERROR: bucket not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       return -ret;
     }
@@ -8616,7 +8598,7 @@ next:
       cerr << "ERROR: bucket not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       return -ret;
     }
@@ -8632,7 +8614,7 @@ next:
       cerr << "ERROR: bucket not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket_for_sync(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket_for_sync(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       return -ret;
     }
@@ -8665,7 +8647,7 @@ next:
       cerr << "ERROR: bucket not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket_for_sync(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket_for_sync(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       return -ret;
     }
@@ -8690,7 +8672,7 @@ next:
       cerr << "ERROR: bucket not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -8892,7 +8874,7 @@ next:
       return -ret;
     }
 
-    show_result(sync_policy, zone_formatter.get(), cout);
+    show_result(sync_policy, admin_args.zone_formatter.get(), cout);
   }
 
   if (opt_cmd == OPT::SYNC_GROUP_GET) {
@@ -8906,7 +8888,7 @@ next:
     auto& groups = sync_policy.groups;
 
     if (!opt_group_id) {
-      show_result(groups, zone_formatter.get(), cout);
+      show_result(groups, admin_args.zone_formatter.get(), cout);
     } else {
       auto iter = sync_policy.groups.find(*opt_group_id);
       if (iter == sync_policy.groups.end()) {
@@ -8914,7 +8896,7 @@ next:
         return ENOENT;
       }
 
-      show_result(iter->second, zone_formatter.get(), cout);
+      show_result(iter->second, admin_args.zone_formatter.get(), cout);
     }
   }
 
@@ -8936,11 +8918,11 @@ next:
     }
 
     {
-      Formatter::ObjectSection os(*zone_formatter.get(), "result");
-      encode_json("sync_policy", sync_policy, zone_formatter.get());
+      Formatter::ObjectSection os(*admin_args.zone_formatter.get(), "result");
+      encode_json("sync_policy", sync_policy, admin_args.zone_formatter.get());
     }
 
-    zone_formatter->flush(cout);
+    admin_args.zone_formatter->flush(cout);
   }
 
   if (opt_cmd == OPT::SYNC_GROUP_FLOW_CREATE) {
@@ -8991,7 +8973,7 @@ next:
       return -ret;
     }
 
-    show_result(sync_policy, zone_formatter.get(), cout);
+    show_result(sync_policy, admin_args.zone_formatter.get(), cout);
   }
 
   if (opt_cmd == OPT::SYNC_GROUP_FLOW_REMOVE) {
@@ -9032,7 +9014,7 @@ next:
       return -ret;
     }
 
-    show_result(sync_policy, zone_formatter.get(), cout);
+    show_result(sync_policy, admin_args.zone_formatter.get(), cout);
   }
 
   if (opt_cmd == OPT::SYNC_GROUP_PIPE_CREATE ||
@@ -9119,7 +9101,7 @@ next:
       return -ret;
     }
 
-    show_result(sync_policy, zone_formatter.get(), cout);
+    show_result(sync_policy, admin_args.zone_formatter.get(), cout);
   }
 
   if (opt_cmd == OPT::SYNC_GROUP_PIPE_REMOVE) {
@@ -9178,7 +9160,7 @@ next:
       return -ret;
     }
 
-    show_result(sync_policy, zone_formatter.get(), cout);
+    show_result(sync_policy, admin_args.zone_formatter.get(), cout);
   }
 
   if (opt_cmd == OPT::SYNC_POLICY_GET) {
@@ -9189,7 +9171,7 @@ next:
     }
     auto& sync_policy = sync_policy_ctx.get_policy();
 
-    show_result(sync_policy, zone_formatter.get(), cout);
+    show_result(sync_policy, admin_args.zone_formatter.get(), cout);
   }
 
   if (opt_cmd == OPT::BILOG_TRIM) {
@@ -9197,7 +9179,7 @@ next:
       cerr << "ERROR: bucket not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -9220,7 +9202,7 @@ next:
       cerr << "ERROR: bucket not specified" << std::endl;
       return EINVAL;
     }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
     if (ret < 0) {
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -9796,7 +9778,7 @@ next:
 
     if (!admin_args.bucket_name.empty()) {
       rgw_pubsub_bucket_topics result;
-      int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, bucket_id, &bucket);
+      int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
       if (ret < 0) {
         cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
         return -ret;
@@ -9952,20 +9934,20 @@ next:
       cerr << "ERROR: context was not provided (via --context)" << std::endl;
       return EINVAL;
     }
-    if (infile.empty()) {
+    if (admin_args.infile.empty()) {
       cerr << "ERROR: infile was not provided (via --infile)" << std::endl;
       return EINVAL;
     }
     bufferlist bl;
-    auto rc = read_input(infile, bl);
+    auto rc = read_input(admin_args.infile, bl);
     if (rc < 0) {
-      cerr << "ERROR: failed to read script: '" << infile << "'. error: " << rc << std::endl;
+      cerr << "ERROR: failed to read script: '" << admin_args.infile << "'. error: " << rc << std::endl;
       return -rc;
     }
     const std::string script = bl.to_str();
     std::string err_msg;
     if (!rgw::lua::verify(script, err_msg)) {
-      cerr << "ERROR: script: '" << infile << "' has error: " << std::endl << err_msg << std::endl;
+      cerr << "ERROR: script: '" << admin_args.infile << "' has error: " << std::endl << err_msg << std::endl;
       return EINVAL;
     }
     const rgw::lua::context script_ctx = rgw::lua::to_context(*str_script_ctx);

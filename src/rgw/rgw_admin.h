@@ -19,8 +19,9 @@
 #include <vector>
 #include <set>
 #include <map>
-#include "rgw_sal.h"
 #include "common/Formatter.h"
+#include "rgw_sal.h"
+#include "rgw_user.h"
 
 
 namespace rgw_admin {
@@ -213,6 +214,7 @@ struct AdminArgs {
   uint64_t orphan_stale_secs{(24 * 3600)};
   std::string job_id;
   std::unique_ptr<Formatter> formatter;
+  std::unique_ptr<Formatter> zone_formatter;
   int num_shards{0};
   bool num_shards_specified{false};
   std::optional<std::string> rgw_obj_fs; // radoslist field separator
@@ -223,6 +225,20 @@ struct AdminArgs {
   std::list<std::string> sync_from_rm;
   int set_default{0};
   std::optional<bool> opt_is_master;
+  std::optional<bool> opt_read_only;
+  int commit{false};
+  int staging{false};
+  int key_type{KEY_TYPE_UNDEFINED};
+  std::string bucket_id;
+  std::string new_bucket_name;
+  int show_log_entries{true};
+  int show_log_sum{true};
+  int skip_zero_entries{false};  // log show
+  int fix{false};
+  int remove_bad{false};
+  int check_head_obj_locator{false};
+  std::map<std::string, bool> categories;
+  std::string infile;
   
   int yes_i_really_mean_it{false};
 };
