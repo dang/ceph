@@ -3381,18 +3381,6 @@ int main(int argc, const char **argv)
   string op_id;
   string op_mask_str;
 
-  int include_all = false;
-  int allow_unordered = false;
-
-  int sync_stats = false;
-  int reset_stats = false;
-  int bypass_gc = false;
-  int warnings_only = false;
-  int inconsistent_index = false;
-
-  int verbose = false;
-
-
   uint64_t min_rewrite_size = 4 * 1024 * 1024;
   uint64_t max_rewrite_size = ULLONG_MAX;
   uint64_t min_rewrite_stripe_size = 0;
@@ -3554,7 +3542,7 @@ int main(int argc, const char **argv)
       admin_args.opt_admin = tmp_int;
     } else if (ceph_argparse_binary_flag(args, i, &tmp_int, NULL, "--system", (char*)NULL)) {
       admin_args.opt_system = tmp_int;
-    } else if (ceph_argparse_binary_flag(args, i, &verbose, NULL, "--verbose", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.verbose, NULL, "--verbose", (char*)NULL)) {
       // do nothing
     } else if (ceph_argparse_binary_flag(args, i, &admin_args.staging, NULL, "--staging", (char*)NULL)) {
       // do nothing
@@ -3708,21 +3696,21 @@ int main(int argc, const char **argv)
       // do nothing
     } else if (ceph_argparse_binary_flag(args, i, &check_objects, NULL, "--check-objects", (char*)NULL)) {
      // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &sync_stats, NULL, "--sync-stats", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.sync_stats, NULL, "--sync-stats", (char*)NULL)) {
      // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &reset_stats, NULL, "--reset-stats", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.reset_stats, NULL, "--reset-stats", (char*)NULL)) {
       // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &include_all, NULL, "--include-all", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.include_all, NULL, "--include-all", (char*)NULL)) {
      // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &allow_unordered, NULL, "--allow-unordered", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.allow_unordered, NULL, "--allow-unordered", (char*)NULL)) {
      // do nothing
     } else if (ceph_argparse_binary_flag(args, i, &admin_args.extra_info, NULL, "--extra-info", (char*)NULL)) {
      // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &bypass_gc, NULL, "--bypass-gc", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.bypass_gc, NULL, "--bypass-gc", (char*)NULL)) {
      // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &warnings_only, NULL, "--warnings-only", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.warnings_only, NULL, "--warnings-only", (char*)NULL)) {
      // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &inconsistent_index, NULL, "--inconsistent-index", (char*)NULL)) {
+    } else if (ceph_argparse_binary_flag(args, i, &admin_args.inconsistent_index, NULL, "--inconsistent-index", (char*)NULL)) {
      // do nothing
     } else if (ceph_argparse_witharg(args, i, &val, "--caps", (char*)NULL)) {
       caps = val;
@@ -4046,7 +4034,7 @@ int main(int argc, const char **argv)
 
     raw_storage_op = opt_cmd.raw_storage || raw_period_update || raw_period_pull;
     bool need_cache = !opt_cmd.read_only;
-    bool need_gc = opt_cmd.gc && !bypass_gc;
+    bool need_gc = opt_cmd.gc && !admin_args.bypass_gc;
 
     if (raw_storage_op) {
       store = StoreManager::get_raw_storage(dpp(),
@@ -6532,7 +6520,7 @@ int main(int argc, const char **argv)
       user_ids.push_back(admin_args.user->get_id().id);
       ret =
 	RGWBucketAdminOp::limit_check(store, bucket_op, user_ids, stream_flusher,
-				      null_yield, dpp(), warnings_only);
+				      null_yield, dpp(), admin_args.warnings_only);
     } else {
       /* list users in groups of max-keys, then perform user-bucket
        * limit-check on each group */
@@ -6554,7 +6542,7 @@ int main(int argc, const char **argv)
 	  /* ok, do the limit checks for this group */
 	  ret =
 	    RGWBucketAdminOp::limit_check(store, bucket_op, user_ids, stream_flusher,
-					  null_yield, dpp(), warnings_only);
+					  null_yield, dpp(), admin_args.warnings_only);
 	  if (ret < 0)
 	    break;
 	}
@@ -6605,7 +6593,7 @@ int main(int argc, const char **argv)
       params.ns = ns;
       params.enforce_ns = false;
       params.list_versions = true;
-      params.allow_unordered = bool(allow_unordered);
+      params.allow_unordered = bool(admin_args.allow_unordered);
 
       do {
         const int remaining = admin_args.max_entries - count;
@@ -7487,7 +7475,7 @@ next:
       fault.inject(*inject_abort_at, InjectAbort{});
     }
     ret = br.execute(admin_args.num_shards, fault, admin_args.max_entries, dpp(),
-                     verbose, &cout, admin_args.formatter.get());
+                     admin_args.verbose, &cout, admin_args.formatter.get());
     return -ret;
   }
 
@@ -7749,15 +7737,15 @@ next:
   }
 
   if (opt_cmd == OPT::BUCKET_RM) {
-    if (!inconsistent_index) {
-      RGWBucketAdminOp::remove_bucket(store, bucket_op, null_yield, dpp(), bypass_gc, true);
+    if (!admin_args.inconsistent_index) {
+      RGWBucketAdminOp::remove_bucket(store, bucket_op, null_yield, dpp(), admin_args.bypass_gc, true);
     } else {
       if (!admin_args.yes_i_really_mean_it) {
 	cerr << "using --inconsistent_index can corrupt the bucket index " << std::endl
 	<< "do you really mean it? (requires --yes-i-really-mean-it)" << std::endl;
 	return 1;
       }
-      RGWBucketAdminOp::remove_bucket(store, bucket_op, null_yield, dpp(), bypass_gc, false);
+      RGWBucketAdminOp::remove_bucket(store, bucket_op, null_yield, dpp(), admin_args.bypass_gc, false);
     }
   }
 
@@ -7769,7 +7757,7 @@ next:
 
     do {
       list<cls_rgw_gc_obj_info> result;
-      int ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->list_gc_objs(&index, admin_args.marker, 1000, !include_all, result, &truncated, processing_queue);
+      int ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->list_gc_objs(&index, admin_args.marker, 1000, !admin_args.include_all, result, &truncated, processing_queue);
       if (ret < 0) {
 	cerr << "ERROR: failed to list objs: " << cpp_strerror(-ret) << std::endl;
 	return 1;
@@ -7799,7 +7787,7 @@ next:
   }
 
   if (opt_cmd == OPT::GC_PROCESS) {
-    int ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->process_gc(!include_all);
+    int ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->process_gc(!admin_args.include_all);
     if (ret < 0) {
       cerr << "ERROR: gc processing returned error: " << cpp_strerror(-ret) << std::endl;
       return 1;
@@ -7912,13 +7900,13 @@ next:
       cerr << "ERROR: uid not specified" << std::endl;
       return EINVAL;
     }
-    if (reset_stats) {
+    if (admin_args.reset_stats) {
       if (!admin_args.bucket_name.empty()) {
 	cerr << "ERROR: --reset-stats does not work on buckets and "
 	  "bucket specified" << std::endl;
 	return EINVAL;
       }
-      if (sync_stats) {
+      if (admin_args.sync_stats) {
 	cerr << "ERROR: sync-stats includes the reset-stats functionality, "
 	  "so at most one of the two should be specified" << std::endl;
 	return EINVAL;
@@ -7931,7 +7919,7 @@ next:
       }
     }
 
-    if (sync_stats) {
+    if (admin_args.sync_stats) {
       if (!admin_args.bucket_name.empty()) {
         int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
         if (ret < 0) {

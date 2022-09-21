@@ -268,6 +268,14 @@ struct AdminArgs {
   std::optional<int64_t> max_write_ops;
   std::optional<int64_t> max_read_bytes;
   std::optional<int64_t> max_write_bytes;
+  int include_all{false};
+  int allow_unordered{false};
+  int sync_stats{false};
+  int reset_stats{false};
+  int bypass_gc{false};
+  int warnings_only{false};
+  int inconsistent_index{false};
+  int verbose{false};
   
   int yes_i_really_mean_it{false};
 };
