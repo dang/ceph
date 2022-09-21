@@ -262,6 +262,12 @@ struct AdminArgs {
   std::list<std::string> tags;
   std::list<std::string> tags_add;
   std::list<std::string> tags_rm;
+  std::optional<int64_t> max_objects;
+  std::optional<int64_t> max_size;
+  std::optional<int64_t> max_read_ops;
+  std::optional<int64_t> max_write_ops;
+  std::optional<int64_t> max_read_bytes;
+  std::optional<int64_t> max_write_bytes;
   
   int yes_i_really_mean_it{false};
 };

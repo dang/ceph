@@ -1175,10 +1175,11 @@ static bool dump_string(const char *field_name, bufferlist& bl, Formatter *f)
   return true;
 }
 
-bool set_ratelimit_info(RGWRateLimitInfo& ratelimit, OPT opt_cmd, int64_t max_read_ops, int64_t max_write_ops,
-                    int64_t max_read_bytes, int64_t max_write_bytes,
-                    bool have_max_read_ops, bool have_max_write_ops,
-                    bool have_max_read_bytes, bool have_max_write_bytes)
+bool set_ratelimit_info(RGWRateLimitInfo& ratelimit, OPT opt_cmd,
+			std::optional<int64_t> max_read_ops,
+			std::optional<int64_t> max_write_ops,
+			std::optional<int64_t> max_read_bytes,
+			std::optional<int64_t> max_write_bytes)
 {
   bool ratelimit_configured = true;
   switch (opt_cmd) {
@@ -1190,27 +1191,27 @@ bool set_ratelimit_info(RGWRateLimitInfo& ratelimit, OPT opt_cmd, int64_t max_re
     case OPT::RATELIMIT_SET:
     case OPT::GLOBAL_RATELIMIT_SET:
       ratelimit_configured = false;
-      if (have_max_read_ops) {
-        if (max_read_ops >= 0) {
-          ratelimit.max_read_ops = max_read_ops;
+      if (max_read_ops) {
+        if (*max_read_ops >= 0) {
+          ratelimit.max_read_ops = *max_read_ops;
           ratelimit_configured = true;
         }
       }
-      if (have_max_write_ops) {
-        if (max_write_ops >= 0) {
-          ratelimit.max_write_ops = max_write_ops;
+      if (max_write_ops) {
+        if (*max_write_ops >= 0) {
+          ratelimit.max_write_ops = *max_write_ops;
           ratelimit_configured = true;
         }
       }
-      if (have_max_read_bytes) {
-        if (max_read_bytes >= 0) {
-          ratelimit.max_read_bytes = max_read_bytes;
+      if (max_read_bytes) {
+        if (*max_read_bytes >= 0) {
+          ratelimit.max_read_bytes = *max_read_bytes;
           ratelimit_configured = true;
         }
       }
-      if (have_max_write_bytes) {
-        if (max_write_bytes >= 0) {
-          ratelimit.max_write_bytes = max_write_bytes;
+      if (max_write_bytes) {
+        if (*max_write_bytes >= 0) {
+          ratelimit.max_write_bytes = *max_write_bytes;
           ratelimit_configured = true;
         }
       }
@@ -1225,8 +1226,8 @@ bool set_ratelimit_info(RGWRateLimitInfo& ratelimit, OPT opt_cmd, int64_t max_re
   return ratelimit_configured;
 }
 
-void set_quota_info(RGWQuotaInfo& quota, OPT opt_cmd, int64_t max_size, int64_t max_objects,
-                    bool have_max_size, bool have_max_objects)
+void set_quota_info(RGWQuotaInfo& quota, OPT opt_cmd, std::optional<int64_t>
+		    max_size, std::optional<int64_t> max_objects)
 {
   switch (opt_cmd) {
     case OPT::QUOTA_ENABLE:
@@ -1237,18 +1238,18 @@ void set_quota_info(RGWQuotaInfo& quota, OPT opt_cmd, int64_t max_size, int64_t 
 
     case OPT::QUOTA_SET:
     case OPT::GLOBAL_QUOTA_SET:
-      if (have_max_objects) {
-        if (max_objects < 0) {
+      if (max_objects) {
+        if (*max_objects < 0) {
           quota.max_objects = -1;
         } else {
-          quota.max_objects = max_objects;
+          quota.max_objects = *max_objects;
         }
       }
-      if (have_max_size) {
-        if (max_size < 0) {
+      if (max_size) {
+        if (*max_size < 0) {
           quota.max_size = -1;
         } else {
-          quota.max_size = rgw_rounded_kb(max_size) * 1024;
+          quota.max_size = rgw_rounded_kb(*max_size) * 1024;
         }
       }
       break;
@@ -1263,8 +1264,8 @@ void set_quota_info(RGWQuotaInfo& quota, OPT opt_cmd, int64_t max_size, int64_t 
 
 int set_bucket_quota(rgw::sal::Store* store, OPT opt_cmd,
                      const string& tenant_name, const string& bucket_name,
-                     int64_t max_size, int64_t max_objects,
-                     bool have_max_size, bool have_max_objects)
+                     std::optional<int64_t> max_size,
+		     std::optional<int64_t> max_objects)
 {
   std::unique_ptr<rgw::sal::Bucket> bucket;
   int r = store->get_bucket(dpp(), nullptr, tenant_name, bucket_name, &bucket, null_yield);
@@ -1273,7 +1274,7 @@ int set_bucket_quota(rgw::sal::Store* store, OPT opt_cmd,
     return -r;
   }
 
-  set_quota_info(bucket->get_info().quota, opt_cmd, max_size, max_objects, have_max_size, have_max_objects);
+  set_quota_info(bucket->get_info().quota, opt_cmd, max_size, max_objects);
 
   r = bucket->put_info(dpp(), false, real_time());
   if (r < 0) {
@@ -1285,10 +1286,10 @@ int set_bucket_quota(rgw::sal::Store* store, OPT opt_cmd,
 
 int set_bucket_ratelimit(rgw::sal::Store* store, OPT opt_cmd,
                      const string& tenant_name, const string& bucket_name,
-                     int64_t max_read_ops, int64_t max_write_ops,
-                     int64_t max_read_bytes, int64_t max_write_bytes,
-                     bool have_max_read_ops, bool have_max_write_ops,
-                     bool have_max_read_bytes, bool have_max_write_bytes)
+                     std::optional<int64_t> max_read_ops,
+		     std::optional<int64_t> max_write_ops,
+                     std::optional<int64_t> max_read_bytes,
+		     std::optional<int64_t> max_write_bytes)
 {
   std::unique_ptr<rgw::sal::Bucket> bucket;
   int r = store->get_bucket(dpp(), nullptr, tenant_name, bucket_name, &bucket, null_yield);
@@ -1308,10 +1309,9 @@ int set_bucket_ratelimit(rgw::sal::Store* store, OPT opt_cmd,
       return -EIO;
     }
   }
-  bool ratelimit_configured = set_ratelimit_info(ratelimit_info, opt_cmd, max_read_ops, max_write_ops,
-                         max_read_bytes, max_write_bytes,
-                         have_max_read_ops, have_max_write_ops,
-                         have_max_read_bytes, have_max_write_bytes);
+  bool ratelimit_configured = set_ratelimit_info(ratelimit_info, opt_cmd,
+						 max_read_ops, max_write_ops,
+						 max_read_bytes, max_write_bytes);
   if (!ratelimit_configured) {
     ldpp_dout(dpp(), 0) << "ERROR: no rate limit values have been specified" << dendl;
     return -EINVAL;
@@ -1329,10 +1329,10 @@ int set_bucket_ratelimit(rgw::sal::Store* store, OPT opt_cmd,
 }
 
 int set_user_ratelimit(OPT opt_cmd, std::unique_ptr<rgw::sal::User>& user,
-                     int64_t max_read_ops, int64_t max_write_ops,
-                     int64_t max_read_bytes, int64_t max_write_bytes,
-                     bool have_max_read_ops, bool have_max_write_ops,
-                     bool have_max_read_bytes, bool have_max_write_bytes)
+                     std::optional<int64_t> max_read_ops,
+		     std::optional<int64_t> max_write_ops,
+                     std::optional<int64_t> max_read_bytes,
+		     std::optional<int64_t> max_write_bytes)
 {
   RGWRateLimitInfo ratelimit_info;
   user->load_user(dpp(), null_yield);
@@ -1347,10 +1347,9 @@ int set_user_ratelimit(OPT opt_cmd, std::unique_ptr<rgw::sal::User>& user,
       return -EIO;
     }
   }
-  bool ratelimit_configured = set_ratelimit_info(ratelimit_info, opt_cmd, max_read_ops, max_write_ops,
-                         max_read_bytes, max_write_bytes,
-                         have_max_read_ops, have_max_write_ops,
-                         have_max_read_bytes, have_max_write_bytes);
+  bool ratelimit_configured = set_ratelimit_info(ratelimit_info, opt_cmd,
+						 max_read_ops, max_write_ops,
+						 max_read_bytes, max_write_bytes);
   if (!ratelimit_configured) {
     ldpp_dout(dpp(), 0) << "ERROR: no rate limit values have been specified" << dendl;
     return -EINVAL;
@@ -1418,12 +1417,13 @@ int show_bucket_ratelimit(rgw::sal::Store* store, const string& tenant_name,
   cout << std::endl;
   return 0;
 }
-int set_user_bucket_quota(OPT opt_cmd, RGWUser& user, RGWUserAdminOpState& op_state, int64_t max_size, int64_t max_objects,
-                          bool have_max_size, bool have_max_objects)
+int set_user_bucket_quota(OPT opt_cmd, RGWUser& user, RGWUserAdminOpState& op_state,
+			  std::optional<int64_t> max_size,
+			  std::optional<int64_t> max_objects)
 {
   RGWUserInfo& user_info = op_state.get_user_info();
 
-  set_quota_info(user_info.quota.bucket_quota, opt_cmd, max_size, max_objects, have_max_size, have_max_objects);
+  set_quota_info(user_info.quota.bucket_quota, opt_cmd, max_size, max_objects);
 
   op_state.set_bucket_quota(user_info.quota.bucket_quota);
 
@@ -1436,12 +1436,13 @@ int set_user_bucket_quota(OPT opt_cmd, RGWUser& user, RGWUserAdminOpState& op_st
   return 0;
 }
 
-int set_user_quota(OPT opt_cmd, RGWUser& user, RGWUserAdminOpState& op_state, int64_t max_size, int64_t max_objects,
-                   bool have_max_size, bool have_max_objects)
+int set_user_quota(OPT opt_cmd, RGWUser& user, RGWUserAdminOpState& op_state,
+		   std::optional<int64_t> max_size,
+		   std::optional<int64_t> max_objects)
 {
   RGWUserInfo& user_info = op_state.get_user_info();
 
-  set_quota_info(user_info.quota.user_quota, opt_cmd, max_size, max_objects, have_max_size, have_max_objects);
+  set_quota_info(user_info.quota.user_quota, opt_cmd, max_size, max_objects);
 
   op_state.set_user_quota(user_info.quota.user_quota);
 
@@ -3380,18 +3381,6 @@ int main(int argc, const char **argv)
   string op_id;
   string op_mask_str;
 
-  int64_t max_objects = -1;
-  int64_t max_size = -1;
-  int64_t max_read_ops = 0;
-  int64_t max_write_ops = 0;
-  int64_t max_read_bytes = 0;
-  int64_t max_write_bytes = 0;
-  bool have_max_objects = false;
-  bool have_max_size = false;
-  bool have_max_write_ops = false;
-  bool have_max_read_ops = false;
-  bool have_max_write_bytes = false;
-  bool have_max_read_bytes = false;
   int include_all = false;
   int allow_unordered = false;
 
@@ -3592,47 +3581,41 @@ int main(int argc, const char **argv)
         return EINVAL;
       }
     } else if (ceph_argparse_witharg(args, i, &val, "--max-size", (char*)NULL)) {
-      max_size = strict_iec_cast<long long>(val, &err);
+      admin_args.max_size = strict_iec_cast<long long>(val, &err);
       if (!err.empty()) {
         cerr << "ERROR: failed to parse max size: " << err << std::endl;
         return EINVAL;
       }
-      have_max_size = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--max-objects", (char*)NULL)) {
-      max_objects = (int64_t)strict_strtoll(val.c_str(), 10, &err);
+      admin_args.max_objects = (int64_t)strict_strtoll(val.c_str(), 10, &err);
       if (!err.empty()) {
         cerr << "ERROR: failed to parse max objects: " << err << std::endl;
         return EINVAL;
       }
-      have_max_objects = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--max-read-ops", (char*)NULL)) {
-      max_read_ops = (int64_t)strict_strtoll(val.c_str(), 10, &err);
+      admin_args.max_read_ops = (int64_t)strict_strtoll(val.c_str(), 10, &err);
       if (!err.empty()) {
         cerr << "ERROR: failed to parse max read requests: " << err << std::endl;
         return EINVAL;
       }
-      have_max_read_ops = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--max-write-ops", (char*)NULL)) {
-      max_write_ops = (int64_t)strict_strtoll(val.c_str(), 10, &err);
+      admin_args.max_write_ops = (int64_t)strict_strtoll(val.c_str(), 10, &err);
       if (!err.empty()) {
         cerr << "ERROR: failed to parse max write requests: " << err << std::endl;
         return EINVAL;
       }
-      have_max_write_ops = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--max-read-bytes", (char*)NULL)) {
-      max_read_bytes = (int64_t)strict_strtoll(val.c_str(), 10, &err);
+      admin_args.max_read_bytes = (int64_t)strict_strtoll(val.c_str(), 10, &err);
       if (!err.empty()) {
         cerr << "ERROR: failed to parse max read bytes: " << err << std::endl;
         return EINVAL;
       }
-      have_max_read_bytes = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--max-write-bytes", (char*)NULL)) {
-      max_write_bytes = (int64_t)strict_strtoll(val.c_str(), 10, &err);
+      admin_args.max_write_bytes = (int64_t)strict_strtoll(val.c_str(), 10, &err);
       if (!err.empty()) {
         cerr << "ERROR: failed to parse max write bytes: " << err << std::endl;
         return EINVAL;
       }
-      have_max_write_bytes = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--date", "--time", (char*)NULL)) {
       admin_args.date = val;
       if (admin_args.end_date.empty())
@@ -4378,24 +4361,18 @@ int main(int argc, const char **argv)
         admin_args.formatter->open_object_section("period_config");
         if (admin_args.ratelimit_scope == "bucket") {
           ratelimit_configured = set_ratelimit_info(period_config.bucket_ratelimit, opt_cmd,
-                         max_read_ops, max_write_ops,
-                         max_read_bytes, max_write_bytes,
-                         have_max_read_ops, have_max_write_ops,
-                         have_max_read_bytes, have_max_write_bytes);
+                         admin_args.max_read_ops, admin_args.max_write_ops,
+                         admin_args.max_read_bytes, admin_args.max_write_bytes);
           encode_json("bucket_ratelimit", period_config.bucket_ratelimit, admin_args.formatter.get());
         } else if (admin_args.ratelimit_scope == "user") {
           ratelimit_configured = set_ratelimit_info(period_config.user_ratelimit, opt_cmd,
-                         max_read_ops, max_write_ops,
-                         max_read_bytes, max_write_bytes,
-                         have_max_read_ops, have_max_write_ops,
-                         have_max_read_bytes, have_max_write_bytes);
+                         admin_args.max_read_ops, admin_args.max_write_ops,
+                         admin_args.max_read_bytes, admin_args.max_write_bytes);
           encode_json("user_ratelimit", period_config.user_ratelimit, admin_args.formatter.get());
         } else if (admin_args.ratelimit_scope == "anonymous") {
           ratelimit_configured = set_ratelimit_info(period_config.anon_ratelimit, opt_cmd,
-                         max_read_ops, max_write_ops,
-                         max_read_bytes, max_write_bytes,
-                         have_max_read_ops, have_max_write_ops,
-                         have_max_read_bytes, have_max_write_bytes);
+                         admin_args.max_read_ops, admin_args.max_write_ops,
+                         admin_args.max_read_bytes, admin_args.max_write_bytes);
           encode_json("anonymous_ratelimit", period_config.anon_ratelimit, admin_args.formatter.get());
         } else if (admin_args.ratelimit_scope.empty() && opt_cmd == OPT::GLOBAL_RATELIMIT_GET) {
           // if no scope is given for GET, print both
@@ -4472,13 +4449,11 @@ int main(int argc, const char **argv)
         admin_args.formatter->open_object_section("period_config");
         if (admin_args.quota_scope == "bucket") {
           set_quota_info(period_config.quota.bucket_quota, opt_cmd,
-                         max_size, max_objects,
-                         have_max_size, have_max_objects);
+                         admin_args.max_size, admin_args.max_objects);
           encode_json("bucket quota", period_config.quota.bucket_quota, admin_args.formatter.get());
         } else if (admin_args.quota_scope == "user") {
           set_quota_info(period_config.quota.user_quota, opt_cmd,
-                         max_size, max_objects,
-                         have_max_size, have_max_objects);
+                         admin_args.max_size, admin_args.max_objects);
           encode_json("user quota", period_config.quota.user_quota, admin_args.formatter.get());
         } else if (admin_args.quota_scope.empty() && opt_cmd == OPT::GLOBAL_QUOTA_GET) {
           // if no scope is given for GET, print both
@@ -9418,12 +9393,15 @@ next:
         return EINVAL;
       }
       set_bucket_quota(store, opt_cmd, admin_args.tenant, admin_args.bucket_name,
-                       max_size, max_objects, have_max_size, have_max_objects);
+                       admin_args.max_size, admin_args.max_objects);
     } else if (!rgw::sal::User::empty(admin_args.user)) {
       if (admin_args.quota_scope == "bucket") {
-        return set_user_bucket_quota(opt_cmd, ruser, user_op, max_size, max_objects, have_max_size, have_max_objects);
+	return set_user_bucket_quota(opt_cmd, ruser, user_op,
+				     admin_args.max_size,
+				     admin_args.max_objects);
       } else if (admin_args.quota_scope == "user") {
-        return set_user_quota(opt_cmd, ruser, user_op, max_size, max_objects, have_max_size, have_max_objects);
+	return set_user_quota(opt_cmd, ruser, user_op, admin_args.max_size,
+			      admin_args.max_objects);
       } else {
         cerr << "ERROR: invalid quota scope specification. Please specify either --quota-scope=bucket, or --quota-scope=user" << std::endl;
         return EINVAL;
@@ -9444,17 +9422,19 @@ next:
         cerr << "ERROR: invalid ratelimit scope specification. (bucket scope is not bucket but bucket has been specified)" << std::endl;
         return EINVAL;
       }
-      return set_bucket_ratelimit(store, opt_cmd, admin_args.tenant, admin_args.bucket_name,
-                           max_read_ops, max_write_ops,
-                           max_read_bytes, max_write_bytes,
-                           have_max_read_ops, have_max_write_ops,
-                           have_max_read_bytes, have_max_write_bytes);
+      return set_bucket_ratelimit(store, opt_cmd, admin_args.tenant,
+				  admin_args.bucket_name,
+				  admin_args.max_read_ops,
+				  admin_args.max_write_ops,
+				  admin_args.max_read_bytes,
+				  admin_args.max_write_bytes);
     } else if (!rgw::sal::User::empty(admin_args.user)) {
       } if (admin_args.ratelimit_scope == "user") {
-        return set_user_ratelimit(opt_cmd, admin_args.user, max_read_ops, max_write_ops,
-                         max_read_bytes, max_write_bytes,
-                         have_max_read_ops, have_max_write_ops,
-                         have_max_read_bytes, have_max_write_bytes);
+	return set_user_ratelimit(opt_cmd, admin_args.user,
+				  admin_args.max_read_ops,
+				  admin_args.max_write_ops,
+				  admin_args.max_read_bytes,
+				  admin_args.max_write_bytes);
       } else {
         cerr << "ERROR: invalid ratelimit scope specification. Please specify either --ratelimit-scope=bucket, or --ratelimit-scope=user" << std::endl;
         return EINVAL;
