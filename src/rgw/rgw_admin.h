@@ -239,6 +239,29 @@ struct AdminArgs {
   int check_head_obj_locator{false};
   std::map<std::string, bool> categories;
   std::string infile;
+  std::string metadata_key;
+  std::string totp_serial;
+  std::string totp_seed;
+  std::string totp_seed_type{"hex"};
+  std::vector<std::string> totp_pin;
+  int totp_seconds{0};
+  int totp_window{0};
+  std::string marker;
+  std::string start_marker;
+  std::string end_marker;
+  int max_entries{-1};
+  bool max_entries_specified{false};
+  std::optional<int> opt_admin;
+  std::optional<int> opt_system;
+  std::optional<int> shard_id;
+  std::string quota_scope;
+  std::string ratelimit_scope;
+  std::string object_version;
+  std::string placement_id;
+  std::optional<std::string> opt_storage_class;
+  std::list<std::string> tags;
+  std::list<std::string> tags_add;
+  std::list<std::string> tags_rm;
   
   int yes_i_really_mean_it{false};
 };
@@ -248,7 +271,7 @@ class AdminStore {
     virtual ~AdminStore() {}
 
     virtual void add_cmds(SimpleCmd* cmd) = 0;
-    virtual int process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args) = 0;
+    virtual int process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args, RGWUserAdminOpState* user_op, RGWUser* ruser) = 0;
 };
 
 class AdminStoreRados : public AdminStore {
@@ -256,7 +279,7 @@ class AdminStoreRados : public AdminStore {
     virtual ~AdminStoreRados() {}
 
     virtual void add_cmds(SimpleCmd* cmd) override;
-    virtual int process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args) override;
+    virtual int process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args, RGWUserAdminOpState* user_op, RGWUser* ruser) override;
 };
 
 class AdminStoreDBStore : public AdminStore {
@@ -264,7 +287,7 @@ class AdminStoreDBStore : public AdminStore {
     virtual ~AdminStoreDBStore() {}
 
     virtual void add_cmds(SimpleCmd* cmd) override;
-    virtual int process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args) override;
+    virtual int process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args, RGWUserAdminOpState* user_op, RGWUser* ruser) override;
 };
 
 } // namespace rgw_admin

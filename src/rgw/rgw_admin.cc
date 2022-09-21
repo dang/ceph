@@ -680,12 +680,6 @@ enum class OPT {
   RESHARD_STATUS,
   RESHARD_PROCESS,
   RESHARD_CANCEL,
-  MFA_CREATE,
-  MFA_REMOVE,
-  MFA_GET,
-  MFA_LIST,
-  MFA_CHECK,
-  MFA_RESYNC,
   RESHARD_STALE_INSTANCES_LIST,
   RESHARD_STALE_INSTANCES_DELETE,
   PUBSUB_TOPICS_LIST,
@@ -710,6 +704,12 @@ enum class OPT {
   POOL_ADD,
   POOL_RM,
   POOLS_LIST,
+  MFA_CREATE,
+  MFA_REMOVE,
+  MFA_GET,
+  MFA_LIST,
+  MFA_CHECK,
+  MFA_RESYNC,
 };
 
 }
@@ -911,12 +911,6 @@ static SimpleCmd::Commands all_cmds = {
   { "reshard status", CMD(OPT::RESHARD_STATUS, false, true, false, false) },
   { "reshard process", CMD(OPT::RESHARD_PROCESS, false, false, false, false) },
   { "reshard cancel", CMD(OPT::RESHARD_CANCEL, false, false, false, false) },
-  { "mfa create", CMD(OPT::MFA_CREATE, false, false, false, true) },
-  { "mfa remove", CMD(OPT::MFA_REMOVE, false, false, false, true) },
-  { "mfa get", CMD(OPT::MFA_GET, false, false, false, false) },
-  { "mfa list", CMD(OPT::MFA_LIST, false, false, false, false) },
-  { "mfa check", CMD(OPT::MFA_CHECK, false, false, false, false) },
-  { "mfa resync", CMD(OPT::MFA_RESYNC, false, false, false, true) },
   { "reshard stale-instances list", CMD(OPT::RESHARD_STALE_INSTANCES_LIST, false, false, false, false) },
   { "reshard stale list", CMD(OPT::RESHARD_STALE_INSTANCES_LIST, false, false, false, false) },
   { "reshard stale-instances delete", CMD(OPT::RESHARD_STALE_INSTANCES_DELETE, false, false, false, false) },
@@ -3310,6 +3304,16 @@ static bool* safe_opt_ptr(std::optional<bool>& os)
   return (os ? &(*os) : nullptr);
 }
 
+static int safe_opt(std::optional<int>& os)
+{
+  return os.value_or(0);
+}
+
+//static int* safe_opt_ptr(std::optional<int>& os)
+//{
+  //return (os ? &(*os) : nullptr);
+//}
+
 void init_realm_param(CephContext *cct, string& var, std::optional<string>& opt_var, const string& conf_name)
 {
   var = cct->_conf.get_val<string>(conf_name);
@@ -3372,30 +3376,9 @@ int main(int argc, const char **argv)
   string caps;
   int check_objects = false;
   RGWBucketAdminOpState bucket_op;
-  string metadata_key;
-  RGWObjVersionTracker objv_tracker;
-  string marker;
-  string start_marker;
-  string end_marker;
-  int max_entries = -1;
-  bool max_entries_specified = false;
-  int admin = false;
-  bool admin_specified = false;
-  int system = false;
-  bool system_specified = false;
-  int shard_id = -1;
-  bool specified_shard_id = false;
   string client_id;
   string op_id;
   string op_mask_str;
-  string quota_scope;
-  string ratelimit_scope;
-  string object_version;
-  string placement_id;
-  std::optional<string> opt_storage_class;
-  list<string> tags;
-  list<string> tags_add;
-  list<string> tags_rm;
 
   int64_t max_objects = -1;
   int64_t max_size = -1;
@@ -3451,12 +3434,6 @@ int main(int argc, const char **argv)
 
   boost::optional<std::string> compression_type;
 
-  string totp_serial;
-  string totp_seed;
-  string totp_seed_type = "hex";
-  vector<string> totp_pin;
-  int totp_seconds = 0;
-  int totp_window = 0;
   int trim_delay_ms = 0;
 
   string topic_name;
@@ -3555,7 +3532,7 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "-o", "--object", (char*)NULL)) {
       admin_args.object = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--object-version", (char*)NULL)) {
-      object_version = val;
+      admin_args.object_version = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--client-id", (char*)NULL)) {
       client_id = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--op-id", (char*)NULL)) {
@@ -3584,10 +3561,10 @@ int main(int argc, const char **argv)
       // do nothing
     } else if (ceph_argparse_binary_flag(args, i, &admin_args.skip_zero_entries, NULL, "--skip-zero-entries", (char*)NULL)) {
       // do nothing
-    } else if (ceph_argparse_binary_flag(args, i, &admin, NULL, "--admin", (char*)NULL)) {
-      admin_specified = true;
-    } else if (ceph_argparse_binary_flag(args, i, &system, NULL, "--system", (char*)NULL)) {
-      system_specified = true;
+    } else if (ceph_argparse_binary_flag(args, i, &tmp_int, NULL, "--admin", (char*)NULL)) {
+      admin_args.opt_admin = tmp_int;
+    } else if (ceph_argparse_binary_flag(args, i, &tmp_int, NULL, "--system", (char*)NULL)) {
+      admin_args.opt_system = tmp_int;
     } else if (ceph_argparse_binary_flag(args, i, &verbose, NULL, "--verbose", (char*)NULL)) {
       // do nothing
     } else if (ceph_argparse_binary_flag(args, i, &admin_args.staging, NULL, "--staging", (char*)NULL)) {
@@ -3608,8 +3585,8 @@ int main(int argc, const char **argv)
       }
       max_buckets_specified = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--max-entries", (char*)NULL)) {
-      max_entries = (int)strict_strtol(val.c_str(), 10, &err);
-      max_entries_specified = true;
+      admin_args.max_entries = (int)strict_strtol(val.c_str(), 10, &err);
+      admin_args.max_entries_specified = true;
       if (!err.empty()) {
         cerr << "ERROR: failed to parse max entries: " << err << std::endl;
         return EINVAL;
@@ -3690,12 +3667,11 @@ int main(int argc, const char **argv)
         return EINVAL;
       }
     } else if (ceph_argparse_witharg(args, i, &val, "--shard-id", (char*)NULL)) {
-      shard_id = (int)strict_strtol(val.c_str(), 10, &err);
+      admin_args.shard_id = (int)strict_strtol(val.c_str(), 10, &err);
       if (!err.empty()) {
         cerr << "ERROR: failed to parse shard id: " << err << std::endl;
         return EINVAL;
       }
-      specified_shard_id = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--gen", (char*)NULL)) {
       gen = strict_strtoll(val.c_str(), 10, &err);
       if (!err.empty()) {
@@ -3770,17 +3746,17 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--infile", (char*)NULL)) {
       admin_args.infile = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--metadata-key", (char*)NULL)) {
-      metadata_key = val;
+      admin_args.metadata_key = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--marker", (char*)NULL)) {
-      marker = val;
+      admin_args.marker = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--start-marker", (char*)NULL)) {
-      start_marker = val;
+      admin_args.start_marker = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--end-marker", (char*)NULL)) {
-      end_marker = val;
+      admin_args.end_marker = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--quota-scope", (char*)NULL)) {
-      quota_scope = val;
+      admin_args.quota_scope = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--ratelimit-scope", (char*)NULL)) {
-      ratelimit_scope = val;
+      admin_args.ratelimit_scope = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--index-type", (char*)NULL)) {
       string index_type_str = val;
       bi_index_type = get_bi_index_type(index_type_str);
@@ -3829,15 +3805,15 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--zonegroup-new-name", (char*)NULL)) {
       zonegroup_new_name = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--placement-id", (char*)NULL)) {
-      placement_id = val;
+      admin_args.placement_id = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--storage-class", (char*)NULL)) {
-      opt_storage_class = val;
+      admin_args.opt_storage_class = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--tags", (char*)NULL)) {
-      get_str_list(val, ",", tags);
+      get_str_list(val, ",", admin_args.tags);
     } else if (ceph_argparse_witharg(args, i, &val, "--tags-add", (char*)NULL)) {
-      get_str_list(val, ",", tags_add);
+      get_str_list(val, ",", admin_args.tags_add);
     } else if (ceph_argparse_witharg(args, i, &val, "--tags-rm", (char*)NULL)) {
-      get_str_list(val, ",", tags_rm);
+      get_str_list(val, ",", admin_args.tags_rm);
     } else if (ceph_argparse_witharg(args, i, &val, "--api-name", (char*)NULL)) {
       admin_args.api_name = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--zone-id", (char*)NULL)) {
@@ -3906,17 +3882,17 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--max-session-duration", (char*)NULL)) {
       admin_args.max_session_duration = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--totp-serial", (char*)NULL)) {
-      totp_serial = val;
+      admin_args.totp_serial = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--totp-pin", (char*)NULL)) {
-      totp_pin.push_back(val);
+      admin_args.totp_pin.push_back(val);
     } else if (ceph_argparse_witharg(args, i, &val, "--totp-seed", (char*)NULL)) {
-      totp_seed = val;
+      admin_args.totp_seed = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--totp-seed-type", (char*)NULL)) {
-      totp_seed_type = val;
+      admin_args.totp_seed_type = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--totp-seconds", (char*)NULL)) {
-      totp_seconds = atoi(val.c_str());
+      admin_args.totp_seconds = atoi(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--totp-window", (char*)NULL)) {
-      totp_window = atoi(val.c_str());
+      admin_args.totp_window = atoi(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--trim-delay-ms", (char*)NULL)) {
       trim_delay_ms = atoi(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--topic", (char*)NULL)) {
@@ -4073,7 +4049,7 @@ int main(int argc, const char **argv)
         case OPT::METADATA_PUT:
         case OPT::METADATA_RM:
         case OPT::METADATA_LIST:
-          metadata_key = extra_args[0];
+          admin_args.metadata_key = extra_args[0];
           break;
         default:
           break;
@@ -4400,28 +4376,28 @@ int main(int argc, const char **argv)
         }
         bool ratelimit_configured = true;
         admin_args.formatter->open_object_section("period_config");
-        if (ratelimit_scope == "bucket") {
+        if (admin_args.ratelimit_scope == "bucket") {
           ratelimit_configured = set_ratelimit_info(period_config.bucket_ratelimit, opt_cmd,
                          max_read_ops, max_write_ops,
                          max_read_bytes, max_write_bytes,
                          have_max_read_ops, have_max_write_ops,
                          have_max_read_bytes, have_max_write_bytes);
           encode_json("bucket_ratelimit", period_config.bucket_ratelimit, admin_args.formatter.get());
-        } else if (ratelimit_scope == "user") {
+        } else if (admin_args.ratelimit_scope == "user") {
           ratelimit_configured = set_ratelimit_info(period_config.user_ratelimit, opt_cmd,
                          max_read_ops, max_write_ops,
                          max_read_bytes, max_write_bytes,
                          have_max_read_ops, have_max_write_ops,
                          have_max_read_bytes, have_max_write_bytes);
           encode_json("user_ratelimit", period_config.user_ratelimit, admin_args.formatter.get());
-        } else if (ratelimit_scope == "anonymous") {
+        } else if (admin_args.ratelimit_scope == "anonymous") {
           ratelimit_configured = set_ratelimit_info(period_config.anon_ratelimit, opt_cmd,
                          max_read_ops, max_write_ops,
                          max_read_bytes, max_write_bytes,
                          have_max_read_ops, have_max_write_ops,
                          have_max_read_bytes, have_max_write_bytes);
           encode_json("anonymous_ratelimit", period_config.anon_ratelimit, admin_args.formatter.get());
-        } else if (ratelimit_scope.empty() && opt_cmd == OPT::GLOBAL_RATELIMIT_GET) {
+        } else if (admin_args.ratelimit_scope.empty() && opt_cmd == OPT::GLOBAL_RATELIMIT_GET) {
           // if no scope is given for GET, print both
           encode_json("bucket_ratelimit", period_config.bucket_ratelimit, admin_args.formatter.get());
           encode_json("user_ratelimit", period_config.user_ratelimit, admin_args.formatter.get());
@@ -4494,17 +4470,17 @@ int main(int argc, const char **argv)
         }
 
         admin_args.formatter->open_object_section("period_config");
-        if (quota_scope == "bucket") {
+        if (admin_args.quota_scope == "bucket") {
           set_quota_info(period_config.quota.bucket_quota, opt_cmd,
                          max_size, max_objects,
                          have_max_size, have_max_objects);
           encode_json("bucket quota", period_config.quota.bucket_quota, admin_args.formatter.get());
-        } else if (quota_scope == "user") {
+        } else if (admin_args.quota_scope == "user") {
           set_quota_info(period_config.quota.user_quota, opt_cmd,
                          max_size, max_objects,
                          have_max_size, have_max_objects);
           encode_json("user quota", period_config.quota.user_quota, admin_args.formatter.get());
-        } else if (quota_scope.empty() && opt_cmd == OPT::GLOBAL_QUOTA_GET) {
+        } else if (admin_args.quota_scope.empty() && opt_cmd == OPT::GLOBAL_QUOTA_GET) {
           // if no scope is given for GET, print both
           encode_json("bucket quota", period_config.quota.bucket_quota, admin_args.formatter.get());
           encode_json("user quota", period_config.quota.user_quota, admin_args.formatter.get());
@@ -5253,7 +5229,7 @@ int main(int argc, const char **argv)
       break;
     case OPT::ZONEGROUP_PLACEMENT_GET:
       {
-	if (placement_id.empty()) {
+	if (admin_args.placement_id.empty()) {
 	  cerr << "ERROR: --placement-id not specified" << std::endl;
 	  return EINVAL;
 	}
@@ -5265,9 +5241,9 @@ int main(int argc, const char **argv)
 	  return -ret;
 	}
 
-	auto p = zonegroup.placement_targets.find(placement_id);
+	auto p = zonegroup.placement_targets.find(admin_args.placement_id);
 	if (p == zonegroup.placement_targets.end()) {
-	  cerr << "failed to find a zonegroup placement target named '" << placement_id << "'" << std::endl;
+	  cerr << "failed to find a zonegroup placement target named '" << admin_args.placement_id << "'" << std::endl;
 	  return -ENOENT;
 	}
 	encode_json("placement_targets", p->second, admin_args.formatter.get());
@@ -5279,20 +5255,20 @@ int main(int argc, const char **argv)
     case OPT::ZONEGROUP_PLACEMENT_RM:
     case OPT::ZONEGROUP_PLACEMENT_DEFAULT:
       {
-    if (placement_id.empty()) {
+    if (admin_args.placement_id.empty()) {
       cerr << "ERROR: --placement-id not specified" << std::endl;
       return EINVAL;
     }
 
     rgw_placement_rule rule;
-    rule.from_str(placement_id);
+    rule.from_str(admin_args.placement_id);
 
-    if (!rule.storage_class.empty() && opt_storage_class &&
-        rule.storage_class != *opt_storage_class) {
+    if (!rule.storage_class.empty() && admin_args.opt_storage_class &&
+        rule.storage_class != *admin_args.opt_storage_class) {
       cerr << "ERROR: provided contradicting storage class configuration" << std::endl;
       return EINVAL;
     } else if (rule.storage_class.empty()) {
-      rule.storage_class = opt_storage_class.value_or(string());
+      rule.storage_class = admin_args.opt_storage_class.value_or(string());
     }
 
 	RGWZoneGroup zonegroup(admin_args.zonegroup_id, admin_args.zonegroup_name);
@@ -5304,19 +5280,19 @@ int main(int argc, const char **argv)
 
     if (opt_cmd == OPT::ZONEGROUP_PLACEMENT_ADD ||
       opt_cmd == OPT::ZONEGROUP_PLACEMENT_MODIFY) {
-      RGWZoneGroupPlacementTarget& target = zonegroup.placement_targets[placement_id];
-      if (!tags.empty()) {
+      RGWZoneGroupPlacementTarget& target = zonegroup.placement_targets[admin_args.placement_id];
+      if (!admin_args.tags.empty()) {
         target.tags.clear();
-        for (auto& t : tags) {
+        for (auto& t : admin_args.tags) {
           target.tags.insert(t);
         }
       }
 
-      target.name = placement_id;
-      for (auto& t : tags_rm) {
+      target.name = admin_args.placement_id;
+      for (auto& t : admin_args.tags_rm) {
         target.tags.erase(t);
       }
-      for (auto& t : tags_add) {
+      for (auto& t : admin_args.tags_add) {
         target.tags.insert(t);
       }
       target.storage_classes.insert(rule.get_storage_class());
@@ -5378,24 +5354,24 @@ int main(int argc, const char **argv)
       }
 
     } else if (opt_cmd == OPT::ZONEGROUP_PLACEMENT_RM) {
-      if (!opt_storage_class || opt_storage_class->empty()) {
-        zonegroup.placement_targets.erase(placement_id);
+      if (!admin_args.opt_storage_class || admin_args.opt_storage_class->empty()) {
+        zonegroup.placement_targets.erase(admin_args.placement_id);
       } else {
-        auto iter = zonegroup.placement_targets.find(placement_id);
+        auto iter = zonegroup.placement_targets.find(admin_args.placement_id);
         if (iter != zonegroup.placement_targets.end()) {
-          RGWZoneGroupPlacementTarget& info = zonegroup.placement_targets[placement_id];
-          info.storage_classes.erase(*opt_storage_class);
+          RGWZoneGroupPlacementTarget& info = zonegroup.placement_targets[admin_args.placement_id];
+          info.storage_classes.erase(*admin_args.opt_storage_class);
 
-	      auto ptiter = info.tier_targets.find(*opt_storage_class);
+	      auto ptiter = info.tier_targets.find(*admin_args.opt_storage_class);
 	      if (ptiter != info.tier_targets.end()) {
 		    info.tier_targets.erase(ptiter);
 	      }
         }
       }
     } else if (opt_cmd == OPT::ZONEGROUP_PLACEMENT_DEFAULT) {
-      if (!zonegroup.placement_targets.count(placement_id)) {
+      if (!zonegroup.placement_targets.count(admin_args.placement_id)) {
         cerr << "failed to find a zonegroup placement target named '"
-             << placement_id << "'" << std::endl;
+             << admin_args.placement_id << "'" << std::endl;
         return -ENOENT;
       }
       zonegroup.default_placement = rule;
@@ -5816,7 +5792,7 @@ int main(int argc, const char **argv)
     case OPT::ZONE_PLACEMENT_MODIFY:
     case OPT::ZONE_PLACEMENT_RM:
       {
-        if (placement_id.empty()) {
+        if (admin_args.placement_id.empty()) {
           cerr << "ERROR: --placement-id not specified" << std::endl;
           return EINVAL;
         }
@@ -5843,23 +5819,23 @@ int main(int argc, const char **argv)
 	    return -ret;
 	  }
 
-	  auto ptiter = zonegroup.placement_targets.find(placement_id);
+	  auto ptiter = zonegroup.placement_targets.find(admin_args.placement_id);
 	  if (ptiter == zonegroup.placement_targets.end()) {
-	    cerr << "ERROR: placement id '" << placement_id << "' is not configured in zonegroup placement targets" << std::endl;
+	    cerr << "ERROR: placement id '" << admin_args.placement_id << "' is not configured in zonegroup placement targets" << std::endl;
 	    return EINVAL;
 	  }
 
-	  string storage_class = rgw_placement_rule::get_canonical_storage_class(opt_storage_class.value_or(string()));
+	  string storage_class = rgw_placement_rule::get_canonical_storage_class(safe_opt(admin_args.opt_storage_class));
 	  if (ptiter->second.storage_classes.find(storage_class) == ptiter->second.storage_classes.end()) {
-	    cerr << "ERROR: storage class '" << storage_class << "' is not defined in zonegroup '" << placement_id << "' placement target" << std::endl;
+	    cerr << "ERROR: storage class '" << storage_class << "' is not defined in zonegroup '" << admin_args.placement_id << "' placement target" << std::endl;
 	    return EINVAL;
 	  }
 	  if (ptiter->second.tier_targets.find(storage_class) != ptiter->second.tier_targets.end()) {
-	    cerr << "ERROR: storage class '" << storage_class << "' is of tier type in zonegroup '" << placement_id << "' placement target" << std::endl;
+	    cerr << "ERROR: storage class '" << storage_class << "' is of tier type in zonegroup '" << admin_args.placement_id << "' placement target" << std::endl;
 	    return EINVAL;
 	  }
 
-          RGWZonePlacementInfo& info = zone.placement_pools[placement_id];
+          RGWZonePlacementInfo& info = zone.placement_pools[admin_args.placement_id];
 
 	  string opt_index_pool = index_pool.value_or(string());
 	  string opt_data_pool = data_pool.value_or(string());
@@ -5903,14 +5879,14 @@ int main(int argc, const char **argv)
              return ret;
           }
         } else if (opt_cmd == OPT::ZONE_PLACEMENT_RM) {
-          if (!opt_storage_class ||
-              opt_storage_class->empty()) {
-            zone.placement_pools.erase(placement_id);
+          if (!admin_args.opt_storage_class ||
+              admin_args.opt_storage_class->empty()) {
+            zone.placement_pools.erase(admin_args.placement_id);
           } else {
-            auto iter = zone.placement_pools.find(placement_id);
+            auto iter = zone.placement_pools.find(admin_args.placement_id);
             if (iter != zone.placement_pools.end()) {
-              RGWZonePlacementInfo& info = zone.placement_pools[placement_id];
-              info.storage_classes.remove_storage_class(*opt_storage_class);
+              RGWZonePlacementInfo& info = zone.placement_pools[admin_args.placement_id];
+              info.storage_classes.remove_storage_class(*admin_args.opt_storage_class);
             }
           }
         }
@@ -5939,7 +5915,7 @@ int main(int argc, const char **argv)
       break;
     case OPT::ZONE_PLACEMENT_GET:
       {
-	if (placement_id.empty()) {
+	if (admin_args.placement_id.empty()) {
 	  cerr << "ERROR: --placement-id not specified" << std::endl;
 	  return EINVAL;
 	}
@@ -5950,9 +5926,9 @@ int main(int argc, const char **argv)
 	  cerr << "unable to initialize zone: " << cpp_strerror(-ret) << std::endl;
 	  return -ret;
 	}
-	auto p = zone.placement_pools.find(placement_id);
+	auto p = zone.placement_pools.find(admin_args.placement_id);
 	if (p == zone.placement_pools.end()) {
-	  cerr << "ERROR: zone placement target '" << placement_id << "' not found" << std::endl;
+	  cerr << "ERROR: zone placement target '" << admin_args.placement_id << "' not found" << std::endl;
 	  return -ENOENT;
 	}
 	encode_json("placement_pools", p->second, admin_args.formatter.get());
@@ -6035,11 +6011,11 @@ int main(int argc, const char **argv)
   if (max_buckets_specified)
     user_op.set_max_buckets(max_buckets);
 
-  if (admin_specified)
-     user_op.set_admin(admin);
+  if (admin_args.opt_admin)
+     user_op.set_admin(*admin_args.opt_admin);
 
-  if (system_specified)
-    user_op.set_system(system);
+  if (admin_args.opt_system)
+    user_op.set_system(*admin_args.opt_system);
 
   if (set_perm)
     user_op.set_perm(perm_mask);
@@ -6071,10 +6047,10 @@ int main(int argc, const char **argv)
   else if (opt_cmd == OPT::USER_SUSPEND)
     user_op.set_suspension(true);
 
-  if (!placement_id.empty()) {
+  if (!admin_args.placement_id.empty()) {
     rgw_placement_rule target_rule;
-    target_rule.name = placement_id;
-    target_rule.storage_class = opt_storage_class.value_or("");
+    target_rule.name = admin_args.placement_id;
+    target_rule.storage_class = safe_opt(admin_args.opt_storage_class);
     if (!store->valid_placement(target_rule)) {
       cerr << "NOTICE: invalid dest placement: " << target_rule.to_str() << std::endl;
       return EINVAL;
@@ -6082,8 +6058,8 @@ int main(int argc, const char **argv)
     user_op.set_default_placement(target_rule);
   }
 
-  if (!tags.empty()) {
-    user_op.set_placement_tags(tags);
+  if (!admin_args.tags.empty()) {
+    user_op.set_placement_tags(admin_args.tags);
   }
 
   // RGWUser to use for user operations
@@ -6572,7 +6548,7 @@ int main(int argc, const char **argv)
   if (opt_cmd == OPT::BUCKET_LIMIT_CHECK) {
     void *handle;
     std::list<std::string> user_ids;
-    metadata_key = "user";
+    admin_args.metadata_key = "user";
     int max = 1000;
 
     bool truncated;
@@ -6585,7 +6561,7 @@ int main(int argc, const char **argv)
     } else {
       /* list users in groups of max-keys, then perform user-bucket
        * limit-check on each group */
-     ret = store->meta_list_keys_init(dpp(), metadata_key, string(), &handle);
+     ret = store->meta_list_keys_init(dpp(), admin_args.metadata_key, string(), &handle);
       if (ret < 0) {
 	cerr << "ERROR: buckets limit check can't get user metadata_key: "
 	     << cpp_strerror(-ret) << std::endl;
@@ -6636,10 +6612,10 @@ int main(int argc, const char **argv)
       static constexpr int MAX_PAGINATE_SIZE = 10000;
       static constexpr int DEFAULT_MAX_ENTRIES = 1000;
 
-      if (max_entries < 0) {
-	max_entries = DEFAULT_MAX_ENTRIES;
+      if (admin_args.max_entries < 0) {
+	admin_args.max_entries = DEFAULT_MAX_ENTRIES;
       }
-      const int paginate_size = std::min(max_entries, MAX_PAGINATE_SIZE);
+      const int paginate_size = std::min(admin_args.max_entries, MAX_PAGINATE_SIZE);
 
       string prefix;
       string delim;
@@ -6650,14 +6626,14 @@ int main(int argc, const char **argv)
 
       params.prefix = prefix;
       params.delim = delim;
-      params.marker = rgw_obj_key(marker);
+      params.marker = rgw_obj_key(admin_args.marker);
       params.ns = ns;
       params.enforce_ns = false;
       params.list_versions = true;
       params.allow_unordered = bool(allow_unordered);
 
       do {
-        const int remaining = max_entries - count;
+        const int remaining = admin_args.max_entries - count;
 	ret = bucket->list(dpp(), params, std::min(remaining, paginate_size), results,
 			   null_yield);
         if (ret < 0) {
@@ -6671,7 +6647,7 @@ int main(int argc, const char **argv)
           encode_json("entry", entry, admin_args.formatter.get());
         }
         admin_args.formatter->flush(cout);
-      } while (results.is_truncated && count < max_entries);
+      } while (results.is_truncated && count < admin_args.max_entries);
 
       admin_args.formatter->close_section();
       admin_args.formatter->flush(cout);
@@ -6697,7 +6673,7 @@ int main(int argc, const char **argv)
   if (opt_cmd == OPT::BUCKET_STATS) {
     if (admin_args.bucket_name.empty() && !admin_args.bucket_id.empty()) {
       rgw_bucket bucket;
-      if (!rgw_find_bucket_by_id(dpp(), store->ctx(), store, marker, admin_args.bucket_id, &bucket)) {
+      if (!rgw_find_bucket_by_id(dpp(), store->ctx(), store, admin_args.marker, admin_args.bucket_id, &bucket)) {
         cerr << "failure: no such bucket id" << std::endl;
         return -ENOENT;
       }
@@ -6740,8 +6716,8 @@ int main(int argc, const char **argv)
       return EINVAL;
     }
 
-    if (specified_shard_id) {
-      if (shard_id >= admin_args.num_shards) {
+    if (admin_args.shard_id) {
+      if (*admin_args.shard_id >= admin_args.num_shards) {
 	cerr << "ERROR: shard-id must be less than num-shards."
 	     << std::endl;
 	return EINVAL;
@@ -6753,7 +6729,7 @@ int main(int argc, const char **argv)
 	obj = fmt::format("{}{:0>20}", prefix, ctr);
 	shard = RGWSI_BucketIndex_RADOS::bucket_shard_index(obj, admin_args.num_shards);
 	++ctr;
-      } while (shard != shard_id);
+      } while (shard != *admin_args.shard_id);
 
       admin_args.formatter->open_object_section("shard_obj");
       encode_json("obj", obj, admin_args.formatter.get());
@@ -6800,7 +6776,7 @@ int main(int argc, const char **argv)
     bucket_op.set_new_bucket_name(admin_args.new_bucket_name);
     string err;
 
-    int r = RGWBucketAdminOp::chown(store, bucket_op, marker, dpp(), &err);
+    int r = RGWBucketAdminOp::chown(store, bucket_op, admin_args.marker, dpp(), &err);
     if (r < 0) {
       cerr << "failure: " << cpp_strerror(-r) << ": " << err << std::endl;
       return -r;
@@ -7108,8 +7084,8 @@ next:
       return -ret;
     }
     rgw_obj obj(bucket->get_key(), admin_args.object);
-    if (!object_version.empty()) {
-      obj.key.set_instance(object_version);
+    if (!admin_args.object_version.empty()) {
+      obj.key.set_instance(admin_args.object_version);
     }
 
     rgw_cls_bi_entry entry;
@@ -7164,8 +7140,8 @@ next:
 
     list<rgw_cls_bi_entry> entries;
     bool is_truncated;
-    if (max_entries < 0) {
-      max_entries = 1000;
+    if (admin_args.max_entries < 0) {
+      admin_args.max_entries = 1000;
     }
 
     const auto& index = bucket->get_info().layout.current_index;
@@ -7173,11 +7149,11 @@ next:
 
     admin_args.formatter->open_array_section("entries");
 
-    int i = (specified_shard_id ? shard_id : 0);
+    int i = safe_opt(admin_args.shard_id);
     for (; i < max_shards; i++) {
       RGWRados::BucketShard bs(static_cast<rgw::sal::RadosStore*>(store)->getRados());
       int ret = bs.init(dpp(), bucket->get_info(), index, i);
-      marker.clear();
+      admin_args.marker.clear();
 
       if (ret < 0) {
         cerr << "ERROR: bs.init(bucket=" << bucket << ", shard=" << i << "): " << cpp_strerror(-ret) << std::endl;
@@ -7187,7 +7163,7 @@ next:
       do {
         entries.clear();
 	// if object is specified, we use that as a filter to only retrieve some some entries
-        ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->bi_list(bs, admin_args.object, marker, max_entries, &entries, &is_truncated);
+        ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->bi_list(bs, admin_args.object, admin_args.marker, admin_args.max_entries, &entries, &is_truncated);
         if (ret < 0) {
           cerr << "ERROR: bi_list(): " << cpp_strerror(-ret) << std::endl;
           return -ret;
@@ -7197,13 +7173,13 @@ next:
         for (iter = entries.begin(); iter != entries.end(); ++iter) {
           rgw_cls_bi_entry& entry = *iter;
           encode_json("entry", entry, admin_args.formatter.get());
-          marker = entry.idx;
+          admin_args.marker = entry.idx;
         }
         admin_args.formatter->flush(cout);
       } while (is_truncated);
       admin_args.formatter->flush(cout);
 
-      if (specified_shard_id)
+      if (admin_args.shard_id)
         break;
     }
     admin_args.formatter->close_section();
@@ -7269,7 +7245,7 @@ next:
     }
 
     RGWDataAccess data_access(store);
-    rgw_obj_key key(admin_args.object, object_version);
+    rgw_obj_key key(admin_args.object, admin_args.object_version);
 
     RGWDataAccess::BucketRef b;
     RGWDataAccess::ObjectRef obj;
@@ -7305,7 +7281,7 @@ next:
       cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
       return -ret;
     }
-    rgw_obj_key key(admin_args.object, object_version);
+    rgw_obj_key key(admin_args.object, admin_args.object_version);
     ret = rgw_remove_object(dpp(), store, bucket.get(), key);
 
     if (ret < 0) {
@@ -7331,7 +7307,7 @@ next:
     }
 
     std::unique_ptr<rgw::sal::Object> obj = bucket->get_object(admin_args.object);
-    obj->set_instance(object_version);
+    obj->set_instance(admin_args.object_version);
     bool need_rewrite = true;
     if (min_rewrite_stripe_size > 0) {
       ret = check_min_obj_stripe_size(store, obj.get(), min_rewrite_stripe_size, &need_rewrite);
@@ -7524,8 +7500,8 @@ next:
 			nullptr /* no callback */);
 
 #define DEFAULT_RESHARD_MAX_ENTRIES 1000
-    if (max_entries < 1) {
-      max_entries = DEFAULT_RESHARD_MAX_ENTRIES;
+    if (admin_args.max_entries < 1) {
+      admin_args.max_entries = DEFAULT_RESHARD_MAX_ENTRIES;
     }
 
     ReshardFaultInjector fault;
@@ -7535,7 +7511,7 @@ next:
     } else if (inject_abort_at) {
       fault.inject(*inject_abort_at, InjectAbort{});
     }
-    ret = br.execute(admin_args.num_shards, fault, max_entries, dpp(),
+    ret = br.execute(admin_args.num_shards, fault, admin_args.max_entries, dpp(),
                      verbose, &cout, admin_args.formatter.get());
     return -ret;
   }
@@ -7570,8 +7546,8 @@ next:
   if (opt_cmd == OPT::RESHARD_LIST) {
     int ret;
     int count = 0;
-    if (max_entries < 0) {
-      max_entries = 1000;
+    if (admin_args.max_entries < 0) {
+      admin_args.max_entries = 1000;
     }
 
     int num_logshards =
@@ -7585,7 +7561,7 @@ next:
       std::string marker;
       do {
 	std::list<cls_rgw_reshard_entry> entries;
-        ret = reshard.list(dpp(), i, marker, max_entries - count, entries, &is_truncated);
+        ret = reshard.list(dpp(), i, marker, admin_args.max_entries - count, entries, &is_truncated);
         if (ret < 0) {
           cerr << "Error listing resharding buckets: " << cpp_strerror(-ret) << std::endl;
           return ret;
@@ -7598,9 +7574,9 @@ next:
 	}
         count += entries.size();
         admin_args.formatter->flush(cout);
-      } while (is_truncated && count < max_entries);
+      } while (is_truncated && count < admin_args.max_entries);
 
-      if (count >= max_entries) {
+      if (count >= admin_args.max_entries) {
         break;
       }
     }
@@ -7722,7 +7698,7 @@ next:
       return -ret;
     }
     list<rgw_obj_index_key> oid_list;
-    rgw_obj_key key(admin_args.object, object_version);
+    rgw_obj_key key(admin_args.object, admin_args.object_version);
     rgw_obj_index_key index_key;
     key.get_index_key(&index_key);
     oid_list.push_back(index_key);
@@ -7742,7 +7718,7 @@ next:
       return -ret;
     }
     std::unique_ptr<rgw::sal::Object> obj = bucket->get_object(admin_args.object);
-    obj->set_instance(object_version);
+    obj->set_instance(admin_args.object_version);
 
     ret = obj->get_obj_attrs(null_yield, dpp());
     if (ret < 0) {
@@ -7818,7 +7794,7 @@ next:
 
     do {
       list<cls_rgw_gc_obj_info> result;
-      int ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->list_gc_objs(&index, marker, 1000, !include_all, result, &truncated, processing_queue);
+      int ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->list_gc_objs(&index, admin_args.marker, 1000, !include_all, result, &truncated, processing_queue);
       if (ret < 0) {
 	cerr << "ERROR: failed to list objs: " << cpp_strerror(-ret) << std::endl;
 	return 1;
@@ -7861,11 +7837,11 @@ next:
     string marker;
     int index{0};
 #define MAX_LC_LIST_ENTRIES 100
-    if (max_entries < 0) {
-      max_entries = MAX_LC_LIST_ENTRIES;
+    if (admin_args.max_entries < 0) {
+      admin_args.max_entries = MAX_LC_LIST_ENTRIES;
     }
     do {
-      int ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->list_lc_progress(marker, max_entries,
+      int ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->list_lc_progress(marker, admin_args.max_entries,
 						    bucket_lc_map, index);
       if (ret < 0) {
         cerr << "ERROR: failed to list objs: " << cpp_strerror(-ret)
@@ -8030,7 +8006,7 @@ next:
   }
 
   if (opt_cmd == OPT::METADATA_GET) {
-    int ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->get(metadata_key, admin_args.formatter.get(), null_yield, dpp());
+    int ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->get(admin_args.metadata_key, admin_args.formatter.get(), null_yield, dpp());
     if (ret < 0) {
       cerr << "ERROR: can't get key: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -8046,7 +8022,7 @@ next:
       cerr << "ERROR: failed to read input: " << cpp_strerror(-ret) << std::endl;
       return -ret;
     }
-    ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->put(metadata_key, bl, null_yield, dpp(), RGWMDLogSyncType::APPLY_ALWAYS, false);
+    ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->put(admin_args.metadata_key, bl, null_yield, dpp(), RGWMDLogSyncType::APPLY_ALWAYS, false);
     if (ret < 0) {
       cerr << "ERROR: can't put key: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -8054,7 +8030,7 @@ next:
   }
 
   if (opt_cmd == OPT::METADATA_RM) {
-    int ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->remove(metadata_key, null_yield, dpp());
+    int ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->remove(admin_args.metadata_key, null_yield, dpp());
     if (ret < 0) {
       cerr << "ERROR: can't remove key: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -8063,11 +8039,11 @@ next:
 
   if (opt_cmd == OPT::METADATA_LIST || opt_cmd == OPT::USER_LIST) {
     if (opt_cmd == OPT::USER_LIST) {
-      metadata_key = "user";
+      admin_args.metadata_key = "user";
     }
     void *handle;
     int max = 1000;
-    int ret = store->meta_list_keys_init(dpp(), metadata_key, marker, &handle);
+    int ret = store->meta_list_keys_init(dpp(), admin_args.metadata_key, admin_args.marker, &handle);
     if (ret < 0) {
       cerr << "ERROR: can't get key: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -8076,7 +8052,7 @@ next:
     bool truncated;
     uint64_t count = 0;
 
-    if (max_entries_specified) {
+    if (admin_args.max_entries_specified) {
       admin_args.formatter->open_object_section("result");
     }
     admin_args.formatter->open_array_section("keys");
@@ -8084,7 +8060,7 @@ next:
     uint64_t left;
     do {
       list<string> keys;
-      left = (max_entries_specified ? max_entries - count : max);
+      left = (admin_args.max_entries_specified ? admin_args.max_entries - count : max);
       ret = store->meta_list_keys_next(dpp(), handle, left, keys, &truncated);
       if (ret < 0 && ret != -ENOENT) {
         cerr << "ERROR: lists_keys_next(): " << cpp_strerror(-ret) << std::endl;
@@ -8100,7 +8076,7 @@ next:
 
     admin_args.formatter->close_section();
 
-    if (max_entries_specified) {
+    if (admin_args.max_entries_specified) {
       encode_json("truncated", truncated, admin_args.formatter.get());
       encode_json("count", count, admin_args.formatter.get());
       if (truncated) {
@@ -8122,20 +8098,20 @@ next:
       std::cerr << "end-date not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!end_marker.empty()) {
+    if (!admin_args.end_marker.empty()) {
       std::cerr << "end-marker not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!start_marker.empty()) {
-      if (marker.empty()) {
-	marker = start_marker;
+    if (!admin_args.start_marker.empty()) {
+      if (admin_args.marker.empty()) {
+	admin_args.marker = admin_args.start_marker;
       } else {
 	std::cerr << "start-marker and marker not both allowed." << std::endl;
 	return -EINVAL;
       }
     }
 
-    int i = (specified_shard_id ? shard_id : 0);
+    int i = safe_opt(admin_args.shard_id);
 
     if (admin_args.period_id.empty()) {
       int ret = read_current_period_id(store, admin_args.realm_id, admin_args.realm_name, &admin_args.period_id);
@@ -8152,7 +8128,7 @@ next:
       void *handle;
       list<cls_log_entry> entries;
 
-      meta_log->init_list_entries(i, {}, {}, marker, &handle);
+      meta_log->init_list_entries(i, {}, {}, admin_args.marker, &handle);
       bool truncated;
       do {
 	  int ret = meta_log->list_entries(dpp(), handle, 1000, entries, NULL, &truncated);
@@ -8170,7 +8146,7 @@ next:
 
       meta_log->complete_list_entries(handle);
 
-      if (specified_shard_id)
+      if (admin_args.shard_id)
         break;
     }
 
@@ -8180,7 +8156,7 @@ next:
   }
 
   if (opt_cmd == OPT::MDLOG_STATUS) {
-    int i = (specified_shard_id ? shard_id : 0);
+    int i = safe_opt(admin_args.shard_id);
 
     if (admin_args.period_id.empty()) {
       int ret = read_current_period_id(store, admin_args.realm_id, admin_args.realm_name, &admin_args.period_id);
@@ -8200,7 +8176,7 @@ next:
 
       ::encode_json("info", info, admin_args.formatter.get());
 
-      if (specified_shard_id)
+      if (admin_args.shard_id)
         break;
     }
 
@@ -8244,25 +8220,25 @@ next:
       std::cerr << "end-date not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!start_marker.empty()) {
+    if (!admin_args.start_marker.empty()) {
       std::cerr << "start-marker not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!end_marker.empty()) {
-      if (marker.empty()) {
-	marker = end_marker;
+    if (!admin_args.end_marker.empty()) {
+      if (admin_args.marker.empty()) {
+	admin_args.marker = admin_args.end_marker;
       } else {
 	std::cerr << "end-marker and marker not both allowed." << std::endl;
 	return -EINVAL;
       }
     }
 
-    if (!specified_shard_id) {
+    if (!admin_args.shard_id) {
       cerr << "ERROR: shard-id must be specified for trim operation" << std::endl;
       return EINVAL;
     }
 
-    if (marker.empty()) {
+    if (admin_args.marker.empty()) {
       cerr << "ERROR: marker must be specified for trim operation" << std::endl;
       return EINVAL;
     }
@@ -8275,7 +8251,7 @@ next:
 
     // trim until -ENODATA
     do {
-      ret = meta_log->trim(dpp(), shard_id, {}, {}, {}, marker);
+      ret = meta_log->trim(dpp(), *admin_args.shard_id, {}, {}, {}, admin_args.marker);
     } while (ret == 0);
     if (ret < 0 && ret != -ENODATA) {
       cerr << "ERROR: meta_log->trim(): " << cpp_strerror(-ret) << std::endl;
@@ -8381,18 +8357,18 @@ next:
     }
 
     rgw_data_sync_status sync_status;
-    if (specified_shard_id) {
+    if (admin_args.shard_id) {
       set<string> pending_buckets;
       set<string> recovering_buckets;
       rgw_data_sync_marker sync_marker;
-      ret = sync.read_shard_status(dpp(), shard_id, pending_buckets, recovering_buckets, &sync_marker, 
-                                   max_entries_specified ? max_entries : 20);
+      ret = sync.read_shard_status(dpp(), *admin_args.shard_id, pending_buckets, recovering_buckets, &sync_marker, 
+                                   admin_args.max_entries_specified ? admin_args.max_entries : 20);
       if (ret < 0 && ret != -ENOENT) {
         cerr << "ERROR: sync.read_shard_status() returned ret=" << ret << std::endl;
         return -ret;
       }
       admin_args.formatter->open_object_section("summary");
-      encode_json("shard_id", shard_id, admin_args.formatter.get());
+      encode_json("shard_id", *admin_args.shard_id, admin_args.formatter.get());
       encode_json("marker", sync_marker, admin_args.formatter.get());
       encode_json("pending_buckets", pending_buckets, admin_args.formatter.get());
       encode_json("recovering_buckets", recovering_buckets, admin_args.formatter.get());
@@ -8680,8 +8656,8 @@ next:
     admin_args.formatter->open_array_section("entries");
     bool truncated;
     int count = 0;
-    if (max_entries < 0)
-      max_entries = 1000;
+    if (admin_args.max_entries < 0)
+      admin_args.max_entries = 1000;
 
     const auto& logs = bucket->get_info().layout.logs;
     auto log_layout = std::reference_wrapper{logs.back()};
@@ -8696,7 +8672,8 @@ next:
 
     do {
       list<rgw_bi_log_entry> entries;
-      ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->bilog_rados->log_list(dpp(), bucket->get_info(), log_layout, shard_id, marker, max_entries - count, entries, &truncated);
+      int shard_id = admin_args.shard_id.value_or(-1);
+      ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->bilog_rados->log_list(dpp(), bucket->get_info(), log_layout, shard_id, admin_args.marker, admin_args.max_entries - count, entries, &truncated);
       if (ret < 0) {
         cerr << "ERROR: list_bi_log_entries(): " << cpp_strerror(-ret) << std::endl;
         return -ret;
@@ -8708,18 +8685,18 @@ next:
         rgw_bi_log_entry& entry = *iter;
         encode_json("entry", entry, admin_args.formatter.get());
 
-        marker = entry.id;
+        admin_args.marker = entry.id;
       }
       admin_args.formatter->flush(cout);
-    } while (truncated && count < max_entries);
+    } while (truncated && count < admin_args.max_entries);
 
     admin_args.formatter->close_section();
     admin_args.formatter->flush(cout);
   }
 
   if (opt_cmd == OPT::SYNC_ERROR_LIST) {
-    if (max_entries < 0) {
-      max_entries = 1000;
+    if (admin_args.max_entries < 0) {
+      admin_args.max_entries = 1000;
     }
     if (!admin_args.start_date.empty()) {
       std::cerr << "start-date not allowed." << std::endl;
@@ -8729,13 +8706,13 @@ next:
       std::cerr << "end-date not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!end_marker.empty()) {
+    if (!admin_args.end_marker.empty()) {
       std::cerr << "end-marker not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!start_marker.empty()) {
-      if (marker.empty()) {
-	marker = start_marker;
+    if (!admin_args.start_marker.empty()) {
+      if (admin_args.marker.empty()) {
+	admin_args.marker = admin_args.start_marker;
       } else {
 	std::cerr << "start-marker and marker not both allowed." << std::endl;
 	return -EINVAL;
@@ -8744,9 +8721,7 @@ next:
 
     bool truncated;
 
-    if (shard_id < 0) {
-      shard_id = 0;
-    }
+    int shard_id = safe_opt(admin_args.shard_id);
 
     admin_args.formatter->open_array_section("entries");
 
@@ -8760,7 +8735,7 @@ next:
 
       do {
         list<cls_log_entry> entries;
-        ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->timelog.list(dpp(), oid, {}, {}, max_entries - count, entries, marker, &marker, &truncated,
+        ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->timelog.list(dpp(), oid, {}, {}, admin_args.max_entries - count, entries, admin_args.marker, &admin_args.marker, &truncated,
 					      null_yield);
 	if (ret == -ENOENT) {
 	  break;
@@ -8791,12 +8766,12 @@ next:
           admin_args.formatter->close_section();
           admin_args.formatter->flush(cout);
         }
-      } while (truncated && count < max_entries);
+      } while (truncated && count < admin_args.max_entries);
 
       admin_args.formatter->close_section();
       admin_args.formatter->close_section();
 
-      if (specified_shard_id) {
+      if (admin_args.shard_id) {
         break;
       }
     }
@@ -8814,26 +8789,24 @@ next:
       std::cerr << "end-date not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!start_marker.empty()) {
+    if (!admin_args.start_marker.empty()) {
       std::cerr << "end-date not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!end_marker.empty()) {
+    if (!admin_args.end_marker.empty()) {
       std::cerr << "end-date not allowed." << std::endl;
       return -EINVAL;
     }
 
-    if (shard_id < 0) {
-      shard_id = 0;
-    }
+    int shard_id = safe_opt(admin_args.shard_id);
 
     for (; shard_id < ERROR_LOGGER_SHARDS; ++shard_id) {
-      ret = trim_sync_error_log(shard_id, marker, trim_delay_ms);
+      ret = trim_sync_error_log(shard_id, admin_args.marker, trim_delay_ms);
       if (ret < 0) {
         cerr << "ERROR: sync error trim: " << cpp_strerror(-ret) << std::endl;
         return -ret;
       }
-      if (specified_shard_id) {
+      if (admin_args.shard_id) {
         break;
       }
     }
@@ -9066,12 +9039,12 @@ next:
                             opt_dest_bucket_id);
 
     pipe->params.source.filter.set_prefix(opt_prefix, !!opt_prefix_rm);
-    pipe->params.source.filter.set_tags(tags_add, tags_rm);
+    pipe->params.source.filter.set_tags(admin_args.tags_add, admin_args.tags_rm);
     if (opt_dest_owner) {
       pipe->params.dest.set_owner(*opt_dest_owner);
     }
-    if (opt_storage_class) {
-      pipe->params.dest.set_storage_class(*opt_storage_class);
+    if (admin_args.opt_storage_class) {
+      pipe->params.dest.set_storage_class(*admin_args.opt_storage_class);
     }
     if (opt_priority) {
       pipe->params.priority = *opt_priority;
@@ -9188,9 +9161,10 @@ next:
     if (!gen) {
       gen = 0;
     }
+    int shard_id = admin_args.shard_id.value_or(-1);
     ret = bilog_trim(dpp(), static_cast<rgw::sal::RadosStore*>(store),
 		     bucket->get_info(), *gen,
-		     shard_id, start_marker, end_marker);
+		     shard_id, admin_args.start_marker, admin_args.end_marker);
     if (ret < 0) {
       cerr << "ERROR: trim_bi_log_entries(): " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -9219,6 +9193,7 @@ next:
       log_layout = *i;
     }
 
+    int shard_id = admin_args.shard_id.value_or(-1);
     ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->bilog_rados->get_log_status(dpp(), bucket->get_info(), log_layout, shard_id,
 						    &markers, null_yield);
     if (ret < 0) {
@@ -9263,8 +9238,8 @@ next:
     admin_args.formatter->open_array_section("entries");
     bool truncated;
     int count = 0;
-    if (max_entries < 0)
-      max_entries = 1000;
+    if (admin_args.max_entries < 0)
+      admin_args.max_entries = 1000;
     if (!admin_args.start_date.empty()) {
       std::cerr << "start-date not allowed." << std::endl;
       return -EINVAL;
@@ -9273,13 +9248,13 @@ next:
       std::cerr << "end-date not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!end_marker.empty()) {
+    if (!admin_args.end_marker.empty()) {
       std::cerr << "end-marker not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!start_marker.empty()) {
-      if (marker.empty()) {
-	marker = start_marker;
+    if (!admin_args.start_marker.empty()) {
+      if (admin_args.marker.empty()) {
+	admin_args.marker = admin_args.start_marker;
       } else {
 	std::cerr << "start-marker and marker not both allowed." << std::endl;
 	return -EINVAL;
@@ -9291,12 +9266,12 @@ next:
 
     do {
       std::vector<rgw_data_change_log_entry> entries;
-      if (specified_shard_id) {
-        ret = datalog_svc->list_entries(dpp(), shard_id, max_entries - count,
-					entries, marker,
-					&marker, &truncated);
+      if (admin_args.shard_id) {
+        ret = datalog_svc->list_entries(dpp(), *admin_args.shard_id, admin_args.max_entries - count,
+					entries, admin_args.marker,
+					&admin_args.marker, &truncated);
       } else {
-        ret = datalog_svc->list_entries(dpp(), max_entries - count, entries,
+        ret = datalog_svc->list_entries(dpp(), admin_args.max_entries - count, entries,
 					log_marker, &truncated);
       }
       if (ret < 0) {
@@ -9314,14 +9289,14 @@ next:
         }
       }
       admin_args.formatter.get()->flush(cout);
-    } while (truncated && count < max_entries);
+    } while (truncated && count < admin_args.max_entries);
 
     admin_args.formatter->close_section();
     admin_args.formatter->flush(cout);
   }
 
   if (opt_cmd == OPT::DATALOG_STATUS) {
-    int i = (specified_shard_id ? shard_id : 0);
+    int i = safe_opt(admin_args.shard_id);
 
     admin_args.formatter->open_array_section("entries");
     for (; i < g_ceph_context->_conf->rgw_data_log_num_shards; i++) {
@@ -9332,7 +9307,7 @@ next:
 
       ::encode_json("info", info, admin_args.formatter.get());
 
-      if (specified_shard_id)
+      if (admin_args.shard_id)
         break;
     }
 
@@ -9367,31 +9342,31 @@ next:
       std::cerr << "end-date not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!start_marker.empty()) {
+    if (!admin_args.start_marker.empty()) {
       std::cerr << "start-marker not allowed." << std::endl;
       return -EINVAL;
     }
-    if (!end_marker.empty()) {
-      if (marker.empty()) {
-	marker = end_marker;
+    if (!admin_args.end_marker.empty()) {
+      if (admin_args.marker.empty()) {
+	admin_args.marker = admin_args.end_marker;
       } else {
 	std::cerr << "end-marker and marker not both allowed." << std::endl;
 	return -EINVAL;
       }
     }
 
-    if (!specified_shard_id) {
+    if (!admin_args.shard_id) {
       cerr << "ERROR: requires a --shard-id" << std::endl;
       return EINVAL;
     }
 
-    if (marker.empty()) {
+    if (admin_args.marker.empty()) {
       cerr << "ERROR: requires a --marker" << std::endl;
       return EINVAL;
     }
 
     auto datalog = static_cast<rgw::sal::RadosStore*>(store)->svc()->datalog_rados;
-    ret = datalog->trim_entries(dpp(), shard_id, marker);
+    ret = datalog->trim_entries(dpp(), *admin_args.shard_id, admin_args.marker);
 
     if (ret < 0 && ret != -ENODATA) {
       cerr << "ERROR: trim_entries(): " << cpp_strerror(-ret) << std::endl;
@@ -9438,16 +9413,16 @@ next:
     }
 
     if (!admin_args.bucket_name.empty()) {
-      if (!quota_scope.empty() && quota_scope != "bucket") {
+      if (!admin_args.quota_scope.empty() && admin_args.quota_scope != "bucket") {
         cerr << "ERROR: invalid quota scope specification." << std::endl;
         return EINVAL;
       }
       set_bucket_quota(store, opt_cmd, admin_args.tenant, admin_args.bucket_name,
                        max_size, max_objects, have_max_size, have_max_objects);
     } else if (!rgw::sal::User::empty(admin_args.user)) {
-      if (quota_scope == "bucket") {
+      if (admin_args.quota_scope == "bucket") {
         return set_user_bucket_quota(opt_cmd, ruser, user_op, max_size, max_objects, have_max_size, have_max_objects);
-      } else if (quota_scope == "user") {
+      } else if (admin_args.quota_scope == "user") {
         return set_user_quota(opt_cmd, ruser, user_op, max_size, max_objects, have_max_size, have_max_objects);
       } else {
         cerr << "ERROR: invalid quota scope specification. Please specify either --quota-scope=bucket, or --quota-scope=user" << std::endl;
@@ -9465,7 +9440,7 @@ next:
     }
 
     if (!admin_args.bucket_name.empty()) {
-      if (!ratelimit_scope.empty() && ratelimit_scope != "bucket") {
+      if (!admin_args.ratelimit_scope.empty() && admin_args.ratelimit_scope != "bucket") {
         cerr << "ERROR: invalid ratelimit scope specification. (bucket scope is not bucket but bucket has been specified)" << std::endl;
         return EINVAL;
       }
@@ -9475,7 +9450,7 @@ next:
                            have_max_read_ops, have_max_write_ops,
                            have_max_read_bytes, have_max_write_bytes);
     } else if (!rgw::sal::User::empty(admin_args.user)) {
-      } if (ratelimit_scope == "user") {
+      } if (admin_args.ratelimit_scope == "user") {
         return set_user_ratelimit(opt_cmd, admin_args.user, max_read_ops, max_write_ops,
                          max_read_bytes, max_write_bytes,
                          have_max_read_ops, have_max_write_ops,
@@ -9493,258 +9468,19 @@ next:
     }
 
     if (!admin_args.bucket_name.empty()) {
-      if (!ratelimit_scope.empty() && ratelimit_scope != "bucket") {
+      if (!admin_args.ratelimit_scope.empty() && admin_args.ratelimit_scope != "bucket") {
         cerr << "ERROR: invalid ratelimit scope specification. (bucket scope is not bucket but bucket has been specified)" << std::endl;
         return EINVAL;
       }
       return show_bucket_ratelimit(store, admin_args.tenant, admin_args.bucket_name, admin_args.formatter.get());
     } else if (!rgw::sal::User::empty(admin_args.user)) {
-      } if (ratelimit_scope == "user") {
+      } if (admin_args.ratelimit_scope == "user") {
         return show_user_ratelimit(admin_args.user, admin_args.formatter.get());
       } else {
         cerr << "ERROR: invalid ratelimit scope specification. Please specify either --ratelimit-scope=bucket, or --ratelimit-scope=user" << std::endl;
         return EINVAL;
       }
   }
-
-  if (opt_cmd == OPT::MFA_CREATE) {
-    rados::cls::otp::otp_info_t config;
-
-    if (rgw::sal::User::empty(admin_args.user)) {
-      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
-      return EINVAL;
-    }
-
-    if (totp_serial.empty()) {
-      cerr << "ERROR: TOTP device serial number was not provided (via --totp-serial)" << std::endl;
-      return EINVAL;
-    }
-
-    if (totp_seed.empty()) {
-      cerr << "ERROR: TOTP device seed was not provided (via --totp-seed)" << std::endl;
-      return EINVAL;
-    }
-
-
-    rados::cls::otp::SeedType seed_type;
-    if (totp_seed_type == "hex") {
-      seed_type = rados::cls::otp::OTP_SEED_HEX;
-    } else if (totp_seed_type == "base32") {
-      seed_type = rados::cls::otp::OTP_SEED_BASE32;
-    } else {
-      cerr << "ERROR: invalid seed type: " << totp_seed_type << std::endl;
-      return EINVAL;
-    }
-
-    config.id = totp_serial;
-    config.seed = totp_seed;
-    config.seed_type = seed_type;
-
-    if (totp_seconds > 0) {
-      config.step_size = totp_seconds;
-    }
-
-    if (totp_window > 0) {
-      config.window = totp_window;
-    }
-
-    real_time mtime = real_clock::now();
-    string oid = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.get_mfa_oid(admin_args.user->get_id());
-
-    int ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->mutate(RGWSI_MetaBackend_OTP::get_meta_key(admin_args.user->get_id()),
-					     mtime, &objv_tracker,
-					     null_yield, dpp(),
-					     MDLOG_STATUS_WRITE,
-					     [&] {
-      return static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.create_mfa(dpp(), admin_args.user->get_id(), config, &objv_tracker, mtime, null_yield);
-    });
-    if (ret < 0) {
-      cerr << "MFA creation failed, error: " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-    
-    RGWUserInfo& user_info = user_op.get_user_info();
-    user_info.mfa_ids.insert(totp_serial);
-    user_op.set_mfa_ids(user_info.mfa_ids);
-    string err;
-    ret = ruser.modify(dpp(), user_op, null_yield, &err);
-    if (ret < 0) {
-      cerr << "ERROR: failed storing user info, error: " << err << std::endl;
-      return -ret;
-    }
-  }
-
- if (opt_cmd == OPT::MFA_REMOVE) {
-    if (rgw::sal::User::empty(admin_args.user)) {
-      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
-      return EINVAL;
-    }
-
-    if (totp_serial.empty()) {
-      cerr << "ERROR: TOTP device serial number was not provided (via --totp-serial)" << std::endl;
-      return EINVAL;
-    }
-
-    real_time mtime = real_clock::now();
-
-    int ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->mutate(RGWSI_MetaBackend_OTP::get_meta_key(admin_args.user->get_id()),
-					     mtime, &objv_tracker,
-					     null_yield, dpp(),
-					     MDLOG_STATUS_WRITE,
-					     [&] {
-      return static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.remove_mfa(dpp(), admin_args.user->get_id(), totp_serial, &objv_tracker, mtime, null_yield);
-    });
-    if (ret < 0) {
-      cerr << "MFA removal failed, error: " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-
-    RGWUserInfo& user_info = user_op.get_user_info();
-    user_info.mfa_ids.erase(totp_serial);
-    user_op.set_mfa_ids(user_info.mfa_ids);
-    string err;
-    ret = ruser.modify(dpp(), user_op, null_yield, &err);
-    if (ret < 0) {
-      cerr << "ERROR: failed storing user info, error: " << err << std::endl;
-      return -ret;
-    }
-  }
-
- if (opt_cmd == OPT::MFA_GET) {
-    if (rgw::sal::User::empty(admin_args.user)) {
-      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
-      return EINVAL;
-    }
-
-    if (totp_serial.empty()) {
-      cerr << "ERROR: TOTP device serial number was not provided (via --totp-serial)" << std::endl;
-      return EINVAL;
-    }
-
-    rados::cls::otp::otp_info_t result;
-    int ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.get_mfa(dpp(), admin_args.user->get_id(), totp_serial, &result, null_yield);
-    if (ret < 0) {
-      if (ret == -ENOENT || ret == -ENODATA) {
-        cerr << "MFA serial id not found" << std::endl;
-      } else {
-        cerr << "MFA retrieval failed, error: " << cpp_strerror(-ret) << std::endl;
-      }
-      return -ret;
-    }
-    admin_args.formatter->open_object_section("result");
-    encode_json("entry", result, admin_args.formatter.get());
-    admin_args.formatter->close_section();
-    admin_args.formatter->flush(cout);
-  }
-
- if (opt_cmd == OPT::MFA_LIST) {
-    if (rgw::sal::User::empty(admin_args.user)) {
-      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
-      return EINVAL;
-    }
-
-    list<rados::cls::otp::otp_info_t> result;
-    int ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.list_mfa(dpp(), admin_args.user->get_id(), &result, null_yield);
-    if (ret < 0) {
-      cerr << "MFA listing failed, error: " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-    admin_args.formatter->open_object_section("result");
-    encode_json("entries", result, admin_args.formatter.get());
-    admin_args.formatter->close_section();
-    admin_args.formatter->flush(cout);
-  }
-
- if (opt_cmd == OPT::MFA_CHECK) {
-    if (rgw::sal::User::empty(admin_args.user)) {
-      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
-      return EINVAL;
-    }
-
-    if (totp_serial.empty()) {
-      cerr << "ERROR: TOTP device serial number was not provided (via --totp-serial)" << std::endl;
-      return EINVAL;
-    }
-
-    if (totp_pin.empty()) {
-      cerr << "ERROR: TOTP device serial number was not provided (via --totp-pin)" << std::endl;
-      return EINVAL;
-    }
-
-    list<rados::cls::otp::otp_info_t> result;
-    int ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.check_mfa(dpp(), admin_args.user->get_id(), totp_serial, totp_pin.front(), null_yield);
-    if (ret < 0) {
-      cerr << "MFA check failed, error: " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-
-    cout << "ok" << std::endl;
-  }
-
- if (opt_cmd == OPT::MFA_RESYNC) {
-    if (rgw::sal::User::empty(admin_args.user)) {
-      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
-      return EINVAL;
-    }
-
-    if (totp_serial.empty()) {
-      cerr << "ERROR: TOTP device serial number was not provided (via --totp-serial)" << std::endl;
-      return EINVAL;
-    }
-
-    if (totp_pin.size() != 2) {
-      cerr << "ERROR: missing two --totp-pin params (--totp-pin=<first> --totp-pin=<second>)" << std::endl;
-      return EINVAL;
-    }
-
-    rados::cls::otp::otp_info_t config;
-    int ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.get_mfa(dpp(), admin_args.user->get_id(), totp_serial, &config, null_yield);
-    if (ret < 0) {
-      if (ret == -ENOENT || ret == -ENODATA) {
-        cerr << "MFA serial id not found" << std::endl;
-      } else {
-        cerr << "MFA retrieval failed, error: " << cpp_strerror(-ret) << std::endl;
-      }
-      return -ret;
-    }
-
-    ceph::real_time now;
-
-    ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.otp_get_current_time(dpp(), admin_args.user->get_id(), &now, null_yield);
-    if (ret < 0) {
-      cerr << "ERROR: failed to fetch current time from osd: " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-    time_t time_ofs;
-
-    ret = scan_totp(store->ctx(), now, config, totp_pin, &time_ofs);
-    if (ret < 0) {
-      if (ret == -ENOENT) {
-        cerr << "failed to resync, TOTP values not found in range" << std::endl;
-      } else {
-        cerr << "ERROR: failed to scan for TOTP values: " << cpp_strerror(-ret) << std::endl;
-      }
-      return -ret;
-    }
-
-    config.time_ofs = time_ofs;
-
-    /* now update the backend */
-    real_time mtime = real_clock::now();
-
-    ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->mutate(RGWSI_MetaBackend_OTP::get_meta_key(admin_args.user->get_id()),
-				         mtime, &objv_tracker,
-				         null_yield, dpp(),
-				         MDLOG_STATUS_WRITE,
-				         [&] {
-      return static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.create_mfa(dpp(), admin_args.user->get_id(), config, &objv_tracker, mtime, null_yield);
-    });
-    if (ret < 0) {
-      cerr << "MFA update failed, error: " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-
- }
 
  if (opt_cmd == OPT::RESHARD_STALE_INSTANCES_LIST) {
    if (!static_cast<rgw::sal::RadosStore*>(store)->svc()->zone->can_reshard() && !admin_args.yes_i_really_mean_it) {
@@ -9892,11 +9628,11 @@ next:
 
     RGWPubSub ps(static_cast<rgw::sal::RadosStore*>(store), admin_args.tenant);
 
-    if (!max_entries_specified) {
-      max_entries = RGWPubSub::Sub::DEFAULT_MAX_EVENTS;
+    if (!admin_args.max_entries_specified) {
+      admin_args.max_entries = RGWPubSub::Sub::DEFAULT_MAX_EVENTS;
     }
     auto sub = ps.get_sub_with_events(sub_name);
-    ret = sub->list_events(dpp(), marker, max_entries);
+    ret = sub->list_events(dpp(), admin_args.marker, admin_args.max_entries);
     if (ret < 0) {
       cerr << "ERROR: could not list events: " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -10067,7 +9803,7 @@ next:
 #endif
   }
 
-  return admin_cfg->process_cmd(opt_cmd, store, &admin_args);
+  return admin_cfg->process_cmd(opt_cmd, store, &admin_args, &user_op, &ruser);
 }
 
 static SimpleCmd::Commands radosstore_cmds = {
@@ -10081,6 +9817,12 @@ static SimpleCmd::Commands radosstore_cmds = {
   { "pool rm", CMD(OPT::POOL_RM, false, false, false, false) },
   { "pool list", CMD(OPT::POOLS_LIST, false, false, false, false) },
   { "pools list", CMD(OPT::POOLS_LIST, false, false, false, false) },
+  { "mfa create", CMD(OPT::MFA_CREATE, false, false, false, true) },
+  { "mfa remove", CMD(OPT::MFA_REMOVE, false, false, false, true) },
+  { "mfa get", CMD(OPT::MFA_GET, false, false, false, false) },
+  { "mfa list", CMD(OPT::MFA_LIST, false, false, false, false) },
+  { "mfa check", CMD(OPT::MFA_CHECK, false, false, false, false) },
+  { "mfa resync", CMD(OPT::MFA_RESYNC, false, false, false, true) },
 };
 
 void AdminStoreRados::add_cmds(SimpleCmd* cmd)
@@ -10088,10 +9830,11 @@ void AdminStoreRados::add_cmds(SimpleCmd* cmd)
   cmd->add_commands(radosstore_cmds);
 }
 
-int AdminStoreRados::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args)
+int AdminStoreRados::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args, RGWUserAdminOpState* user_op, RGWUser* ruser)
 {
   int ret;
   rgw_pool pool;
+  RGWObjVersionTracker objv_tracker;
 
   if (!admin_args->pool_name.empty())
     pool = rgw_pool(admin_args->pool_name);
@@ -10272,6 +10015,245 @@ int AdminStoreRados::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs*
     admin_args->formatter->flush(cout);
   }
 
+  if (opt_cmd == OPT::MFA_CREATE) {
+    rados::cls::otp::otp_info_t config;
+
+    if (rgw::sal::User::empty(admin_args->user)) {
+      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
+      return EINVAL;
+    }
+
+    if (admin_args->totp_serial.empty()) {
+      cerr << "ERROR: TOTP device serial number was not provided (via --totp-serial)" << std::endl;
+      return EINVAL;
+    }
+
+    if (admin_args->totp_seed.empty()) {
+      cerr << "ERROR: TOTP device seed was not provided (via --totp-seed)" << std::endl;
+      return EINVAL;
+    }
+
+
+    rados::cls::otp::SeedType seed_type;
+    if (admin_args->totp_seed_type == "hex") {
+      seed_type = rados::cls::otp::OTP_SEED_HEX;
+    } else if (admin_args->totp_seed_type == "base32") {
+      seed_type = rados::cls::otp::OTP_SEED_BASE32;
+    } else {
+      cerr << "ERROR: invalid seed type: " << admin_args->totp_seed_type << std::endl;
+      return EINVAL;
+    }
+
+    config.id = admin_args->totp_serial;
+    config.seed = admin_args->totp_seed;
+    config.seed_type = seed_type;
+
+    if (admin_args->totp_seconds > 0) {
+      config.step_size = admin_args->totp_seconds;
+    }
+
+    if (admin_args->totp_window > 0) {
+      config.window = admin_args->totp_window;
+    }
+
+    real_time mtime = real_clock::now();
+    string oid = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.get_mfa_oid(admin_args->user->get_id());
+
+    int ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->mutate(RGWSI_MetaBackend_OTP::get_meta_key(admin_args->user->get_id()),
+					     mtime, &objv_tracker,
+					     null_yield, dpp(),
+					     MDLOG_STATUS_WRITE,
+					     [&] {
+      return static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.create_mfa(dpp(), admin_args->user->get_id(), config, &objv_tracker, mtime, null_yield);
+    });
+    if (ret < 0) {
+      cerr << "MFA creation failed, error: " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+    
+    RGWUserInfo& user_info = user_op->get_user_info();
+    user_info.mfa_ids.insert(admin_args->totp_serial);
+    user_op->set_mfa_ids(user_info.mfa_ids);
+    string err;
+    ret = ruser->modify(dpp(), *user_op, null_yield, &err);
+    if (ret < 0) {
+      cerr << "ERROR: failed storing user info, error: " << err << std::endl;
+      return -ret;
+    }
+  }
+
+ if (opt_cmd == OPT::MFA_REMOVE) {
+    if (rgw::sal::User::empty(admin_args->user)) {
+      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
+      return EINVAL;
+    }
+
+    if (admin_args->totp_serial.empty()) {
+      cerr << "ERROR: TOTP device serial number was not provided (via --totp-serial)" << std::endl;
+      return EINVAL;
+    }
+
+    real_time mtime = real_clock::now();
+
+    int ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->mutate(RGWSI_MetaBackend_OTP::get_meta_key(admin_args->user->get_id()),
+					     mtime, &objv_tracker,
+					     null_yield, dpp(),
+					     MDLOG_STATUS_WRITE,
+					     [&] {
+      return static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.remove_mfa(dpp(), admin_args->user->get_id(), admin_args->totp_serial, &objv_tracker, mtime, null_yield);
+    });
+    if (ret < 0) {
+      cerr << "MFA removal failed, error: " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+
+    RGWUserInfo& user_info = user_op->get_user_info();
+    user_info.mfa_ids.erase(admin_args->totp_serial);
+    user_op->set_mfa_ids(user_info.mfa_ids);
+    string err;
+    ret = ruser->modify(dpp(), *user_op, null_yield, &err);
+    if (ret < 0) {
+      cerr << "ERROR: failed storing user info, error: " << err << std::endl;
+      return -ret;
+    }
+  }
+
+ if (opt_cmd == OPT::MFA_GET) {
+    if (rgw::sal::User::empty(admin_args->user)) {
+      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
+      return EINVAL;
+    }
+
+    if (admin_args->totp_serial.empty()) {
+      cerr << "ERROR: TOTP device serial number was not provided (via --totp-serial)" << std::endl;
+      return EINVAL;
+    }
+
+    rados::cls::otp::otp_info_t result;
+    int ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.get_mfa(dpp(), admin_args->user->get_id(), admin_args->totp_serial, &result, null_yield);
+    if (ret < 0) {
+      if (ret == -ENOENT || ret == -ENODATA) {
+        cerr << "MFA serial id not found" << std::endl;
+      } else {
+        cerr << "MFA retrieval failed, error: " << cpp_strerror(-ret) << std::endl;
+      }
+      return -ret;
+    }
+    admin_args->formatter->open_object_section("result");
+    encode_json("entry", result, admin_args->formatter.get());
+    admin_args->formatter->close_section();
+    admin_args->formatter->flush(cout);
+  }
+
+ if (opt_cmd == OPT::MFA_LIST) {
+    if (rgw::sal::User::empty(admin_args->user)) {
+      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
+      return EINVAL;
+    }
+
+    list<rados::cls::otp::otp_info_t> result;
+    int ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.list_mfa(dpp(), admin_args->user->get_id(), &result, null_yield);
+    if (ret < 0) {
+      cerr << "MFA listing failed, error: " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+    admin_args->formatter->open_object_section("result");
+    encode_json("entries", result, admin_args->formatter.get());
+    admin_args->formatter->close_section();
+    admin_args->formatter->flush(cout);
+  }
+
+ if (opt_cmd == OPT::MFA_CHECK) {
+    if (rgw::sal::User::empty(admin_args->user)) {
+      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
+      return EINVAL;
+    }
+
+    if (admin_args->totp_serial.empty()) {
+      cerr << "ERROR: TOTP device serial number was not provided (via --totp-serial)" << std::endl;
+      return EINVAL;
+    }
+
+    if (admin_args->totp_pin.empty()) {
+      cerr << "ERROR: TOTP device serial number was not provided (via --totp-pin)" << std::endl;
+      return EINVAL;
+    }
+
+    list<rados::cls::otp::otp_info_t> result;
+    int ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.check_mfa(dpp(), admin_args->user->get_id(), admin_args->totp_serial, admin_args->totp_pin.front(), null_yield);
+    if (ret < 0) {
+      cerr << "MFA check failed, error: " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+
+    cout << "ok" << std::endl;
+  }
+
+ if (opt_cmd == OPT::MFA_RESYNC) {
+    if (rgw::sal::User::empty(admin_args->user)) {
+      cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
+      return EINVAL;
+    }
+
+    if (admin_args->totp_serial.empty()) {
+      cerr << "ERROR: TOTP device serial number was not provided (via --totp-serial)" << std::endl;
+      return EINVAL;
+    }
+
+    if (admin_args->totp_pin.size() != 2) {
+      cerr << "ERROR: missing two --totp-pin params (--totp-pin=<first> --totp-pin=<second>)" << std::endl;
+      return EINVAL;
+    }
+
+    rados::cls::otp::otp_info_t config;
+    int ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.get_mfa(dpp(), admin_args->user->get_id(), admin_args->totp_serial, &config, null_yield);
+    if (ret < 0) {
+      if (ret == -ENOENT || ret == -ENODATA) {
+        cerr << "MFA serial id not found" << std::endl;
+      } else {
+        cerr << "MFA retrieval failed, error: " << cpp_strerror(-ret) << std::endl;
+      }
+      return -ret;
+    }
+
+    ceph::real_time now;
+
+    ret = static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.otp_get_current_time(dpp(), admin_args->user->get_id(), &now, null_yield);
+    if (ret < 0) {
+      cerr << "ERROR: failed to fetch current time from osd: " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+    time_t time_ofs;
+
+    ret = scan_totp(store->ctx(), now, config, admin_args->totp_pin, &time_ofs);
+    if (ret < 0) {
+      if (ret == -ENOENT) {
+        cerr << "failed to resync, TOTP values not found in range" << std::endl;
+      } else {
+        cerr << "ERROR: failed to scan for TOTP values: " << cpp_strerror(-ret) << std::endl;
+      }
+      return -ret;
+    }
+
+    config.time_ofs = time_ofs;
+
+    /* now update the backend */
+    real_time mtime = real_clock::now();
+
+    ret = static_cast<rgw::sal::RadosStore*>(store)->ctl()->meta.mgr->mutate(RGWSI_MetaBackend_OTP::get_meta_key(admin_args->user->get_id()),
+				         mtime, &objv_tracker,
+				         null_yield, dpp(),
+				         MDLOG_STATUS_WRITE,
+				         [&] {
+      return static_cast<rgw::sal::RadosStore*>(store)->svc()->cls->mfa.create_mfa(dpp(), admin_args->user->get_id(), config, &objv_tracker, mtime, null_yield);
+    });
+    if (ret < 0) {
+      cerr << "MFA update failed, error: " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+
+ }
+
   return 0;
 }
 
@@ -10279,7 +10261,7 @@ void AdminStoreDBStore::add_cmds(SimpleCmd* cmd)
 {
 }
 
-int AdminStoreDBStore::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args)
+int AdminStoreDBStore::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args, RGWUserAdminOpState* user_op, RGWUser* ruser)
 {
   return 0;
 }
