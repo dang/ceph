@@ -276,6 +276,9 @@ struct AdminArgs {
   int warnings_only{false};
   int inconsistent_index{false};
   int verbose{false};
+  uint64_t min_rewrite_size{4 * 1024 * 1024};
+  uint64_t max_rewrite_size{ULLONG_MAX};
+  uint64_t min_rewrite_stripe_size{0};
   
   int yes_i_really_mean_it{false};
 };

@@ -3381,10 +3381,6 @@ int main(int argc, const char **argv)
   string op_id;
   string op_mask_str;
 
-  uint64_t min_rewrite_size = 4 * 1024 * 1024;
-  uint64_t max_rewrite_size = ULLONG_MAX;
-  uint64_t min_rewrite_stripe_size = 0;
-
   BIIndexType bi_index_type = BIIndexType::Plain;
   std::optional<log_type> opt_log_type;
 
@@ -3549,11 +3545,11 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_binary_flag(args, i, &admin_args.commit, NULL, "--commit", (char*)NULL)) {
       // do nothing
     } else if (ceph_argparse_witharg(args, i, &val, "--min-rewrite-size", (char*)NULL)) {
-      min_rewrite_size = (uint64_t)atoll(val.c_str());
+      admin_args.min_rewrite_size = (uint64_t)atoll(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--max-rewrite-size", (char*)NULL)) {
-      max_rewrite_size = (uint64_t)atoll(val.c_str());
+      admin_args.max_rewrite_size = (uint64_t)atoll(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--min-rewrite-stripe-size", (char*)NULL)) {
-      min_rewrite_stripe_size = (uint64_t)atoll(val.c_str());
+      admin_args.min_rewrite_stripe_size = (uint64_t)atoll(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--max-buckets", (char*)NULL)) {
       max_buckets = (int)strict_strtol(val.c_str(), 10, &err);
       if (!err.empty()) {
@@ -7272,8 +7268,8 @@ next:
     std::unique_ptr<rgw::sal::Object> obj = bucket->get_object(admin_args.object);
     obj->set_instance(admin_args.object_version);
     bool need_rewrite = true;
-    if (min_rewrite_stripe_size > 0) {
-      ret = check_min_obj_stripe_size(store, obj.get(), min_rewrite_stripe_size, &need_rewrite);
+    if (admin_args.min_rewrite_stripe_size > 0) {
+      ret = check_min_obj_stripe_size(store, obj.get(), admin_args.min_rewrite_stripe_size, &need_rewrite);
       if (ret < 0) {
         ldpp_dout(dpp(), 0) << "WARNING: check_min_obj_stripe_size failed, r=" << ret << dendl;
       }
@@ -7391,8 +7387,8 @@ next:
         utime_t ut(entry.meta.mtime);
         ut.gmtime(admin_args.formatter->dump_stream("mtime"));
 
-        if ((entry.meta.size < min_rewrite_size) ||
-            (entry.meta.size > max_rewrite_size) ||
+        if ((entry.meta.size < admin_args.min_rewrite_size) ||
+            (entry.meta.size > admin_args.max_rewrite_size) ||
             (start_epoch > 0 && start_epoch > (uint64_t)ut.sec()) ||
             (end_epoch > 0 && end_epoch < (uint64_t)ut.sec())) {
           admin_args.formatter->dump_string("status", "Skipped");
@@ -7400,8 +7396,8 @@ next:
 	  std::unique_ptr<rgw::sal::Object> obj = bucket->get_object(key);
 
           bool need_rewrite = true;
-          if (min_rewrite_stripe_size > 0) {
-            r = check_min_obj_stripe_size(store, obj.get(), min_rewrite_stripe_size, &need_rewrite);
+          if (admin_args.min_rewrite_stripe_size > 0) {
+            r = check_min_obj_stripe_size(store, obj.get(), admin_args.min_rewrite_stripe_size, &need_rewrite);
             if (r < 0) {
               ldpp_dout(dpp(), 0) << "WARNING: check_min_obj_stripe_size failed, r=" << r << dendl;
             }
