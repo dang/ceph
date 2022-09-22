@@ -550,10 +550,6 @@ enum class OPT {
   OBJECTS_EXPIRE,
   OBJECTS_EXPIRE_STALE_LIST,
   OBJECTS_EXPIRE_STALE_RM,
-  BI_GET,
-  BI_PUT,
-  BI_LIST,
-  BI_PURGE,
   OLH_GET,
   OLH_READLOG,
   QUOTA_SET,
@@ -710,6 +706,10 @@ enum class OPT {
   MFA_LIST,
   MFA_CHECK,
   MFA_RESYNC,
+  BI_GET,
+  BI_PUT,
+  BI_LIST,
+  BI_PURGE,
 };
 
 }
@@ -770,10 +770,6 @@ static SimpleCmd::Commands all_cmds = {
   { "objects expire", CMD(OPT::OBJECTS_EXPIRE, false, false, true, false) },
   { "objects expire-stale list", CMD(OPT::OBJECTS_EXPIRE_STALE_LIST, false, false, false, false) },
   { "objects expire-stale rm", CMD(OPT::OBJECTS_EXPIRE_STALE_RM, false, false, true, false) },
-  { "bi get", CMD(OPT::BI_GET, false, true, false, false) },
-  { "bi put", CMD(OPT::BI_PUT, false, false, false, false) },
-  { "bi list", CMD(OPT::BI_LIST, false, true, false, false) },
-  { "bi purge", CMD(OPT::BI_PURGE, false, false, false, false) },
   { "olh get", CMD(OPT::OLH_GET, false, true, false, false) },
   { "olh readlog", CMD(OPT::OLH_READLOG, false, true, false, false) },
   { "quota set", CMD(OPT::QUOTA_SET, false, false, false, false) },
@@ -3381,23 +3377,8 @@ int main(int argc, const char **argv)
   string op_id;
   string op_mask_str;
 
-  BIIndexType bi_index_type = BIIndexType::Plain;
-  std::optional<log_type> opt_log_type;
-
-  std::optional<int> bucket_index_max_shards;
-
   std::string val;
-  std::ostringstream errs;
   string err;
-
-  string source_zone_name;
-  rgw_zone_id source_zone; /* zone id */
-
-  string tier_type;
-  bool tier_type_specified = false;
-
-  map<string, string, ltstr_nocase> tier_config_add;
-  map<string, string, ltstr_nocase> tier_config_rm;
 
   boost::optional<string> index_pool;
   boost::optional<string> data_pool;
@@ -3616,7 +3597,7 @@ int main(int argc, const char **argv)
       }
       admin_args.num_shards_specified = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--bucket-index-max-shards", (char*)NULL)) {
-      bucket_index_max_shards = (int)strict_strtol(val.c_str(), 10, &err);
+      admin_args.bucket_index_max_shards = (int)strict_strtol(val.c_str(), 10, &err);
       if (!err.empty()) {
         cerr << "ERROR: failed to parse bucket-index-max-shards: " << err << std::endl;
         return EINVAL;
@@ -3725,12 +3706,7 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--ratelimit-scope", (char*)NULL)) {
       admin_args.ratelimit_scope = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--index-type", (char*)NULL)) {
-      string index_type_str = val;
-      bi_index_type = get_bi_index_type(index_type_str);
-      if (bi_index_type == BIIndexType::Invalid) {
-        cerr << "ERROR: invalid bucket index entry type" << std::endl;
-        return EINVAL;
-      }
+      admin_args.index_type_str = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--log-type", (char*)NULL)) {
       string log_type_str = val;
       auto l = get_log_type(log_type_str);
@@ -3738,7 +3714,7 @@ int main(int argc, const char **argv)
         cerr << "ERROR: invalid log type" << std::endl;
         return EINVAL;
       }
-      opt_log_type = l;
+      admin_args.opt_log_type = l;
     } else if (ceph_argparse_binary_flag(args, i, &is_master_int, NULL, "--master", (char*)NULL)) {
       admin_args.opt_is_master = (bool)is_master_int;
     } else if (ceph_argparse_binary_flag(args, i, &admin_args.set_default, NULL, "--default", (char*)NULL)) {
@@ -3798,7 +3774,6 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_binary_flag(args, i, &tmp_int, NULL, "--sync-from-all", (char*)NULL)) {
       admin_args.sync_from_all = (bool)tmp_int;
     } else if (ceph_argparse_witharg(args, i, &val, "--source-zone", (char*)NULL)) {
-      source_zone_name = val;
       opt_source_zone_name = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--source-zone-id", (char*)NULL)) {
       opt_source_zone_id = val;
@@ -3807,12 +3782,11 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--dest-zone-id", (char*)NULL)) {
       opt_dest_zone_id = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--tier-type", (char*)NULL)) {
-      tier_type = val;
-      tier_type_specified = true;
+      admin_args.opt_tier_type = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--tier-config", (char*)NULL)) {
-      parse_tier_config_param(val, tier_config_add);
+      parse_tier_config_param(val, admin_args.tier_config_add);
     } else if (ceph_argparse_witharg(args, i, &val, "--tier-config-rm", (char*)NULL)) {
-      parse_tier_config_param(val, tier_config_rm);
+      parse_tier_config_param(val, admin_args.tier_config_rm);
     } else if (ceph_argparse_witharg(args, i, &val, "--index-pool", (char*)NULL)) {
       index_pool = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--data-pool", (char*)NULL)) {
@@ -4145,13 +4119,13 @@ int main(int argc, const char **argv)
     user_op.user_email_specified=true;
   }
 
-  if (!source_zone_name.empty()) {
+  if (opt_source_zone_name && !opt_source_zone_name->empty()) {
     std::unique_ptr<rgw::sal::Zone> zone;
-    if (store->get_zone()->get_zonegroup().get_zone_by_name(source_zone_name, &zone) < 0) {
-      cerr << "WARNING: cannot find source zone id for name=" << source_zone_name << std::endl;
-      source_zone = source_zone_name;
+    if (store->get_zone()->get_zonegroup().get_zone_by_name(*opt_source_zone_name, &zone) < 0) {
+      cerr << "WARNING: cannot find source zone id for name=" << *opt_source_zone_name << std::endl;
+      admin_args.source_zone = *opt_source_zone_name;
     } else {
-      source_zone.id = zone->get_id();
+      admin_args.source_zone.id = zone->get_id();
     }
   }
 
@@ -4785,9 +4759,9 @@ int main(int argc, const char **argv)
           }
         }
 
-        string *ptier_type = (tier_type_specified ? &tier_type : nullptr);
+        string *ptier_type = safe_opt_ptr(admin_args.opt_tier_type);
 
-        for (auto a : tier_config_add) {
+        for (auto a : admin_args.tier_config_add) {
           int r = zone.tier_config.set(a.first, a.second);
           if (r < 0) {
             cerr << "ERROR: failed to set configurable: " << a << std::endl;
@@ -4807,7 +4781,7 @@ int main(int argc, const char **argv)
                                  safe_opt_ptr(admin_args.opt_read_only),
                                  admin_args.endpoints, ptier_type,
                                  psync_from_all, admin_args.sync_from, admin_args.sync_from_rm,
-                                 predirect_zone, bucket_index_max_shards,
+                                 predirect_zone, admin_args.bucket_index_max_shards,
 				 static_cast<rgw::sal::RadosStore*>(store)->svc()->sync_modules->get_manager(),
                                  enable_features, disable_features, null_yield);
 	if (ret < 0) {
@@ -4995,9 +4969,9 @@ int main(int argc, const char **argv)
           need_update = true;
         }
 
-        if (bucket_index_max_shards) {
+        if (admin_args.bucket_index_max_shards) {
           for (auto& [name, zone] : zonegroup.zones) {
-            zone.bucket_index_max_shards = *bucket_index_max_shards;
+            zone.bucket_index_max_shards = *admin_args.bucket_index_max_shards;
           }
           need_update = true;
         }
@@ -5266,12 +5240,12 @@ int main(int argc, const char **argv)
 	  if (ptiter != target.tier_targets.end()) {
         pt = &ptiter->second;
         tier_class = true;
-      } else if (tier_type_specified) {
-        if (tier_type == "cloud-s3") {
+      } else if (admin_args.opt_tier_type) {
+        if (*admin_args.opt_tier_type == "cloud-s3") {
           /* we support only cloud-s3 tier-type for now.
            * Once set cant be reset. */
           tier_class = true;
-          pt->tier_type = tier_type;
+          pt->tier_type = *admin_args.opt_tier_type;
           pt->storage_class = storage_class;
         } else {
 	      cerr << "ERROR: Invalid tier-type specified" << std::endl;
@@ -5280,9 +5254,9 @@ int main(int argc, const char **argv)
       }
 
       if (tier_class) {
-        if (tier_config_add.size() > 0) {
+        if (admin_args.tier_config_add.size() > 0) {
           JSONFormattable tconfig;
-          for (auto add : tier_config_add) {
+          for (auto add : admin_args.tier_config_add) {
             int r = tconfig.set(add.first, add.second);
             if (r < 0) {
               cerr << "ERROR: failed to set configurable: " << add << std::endl;
@@ -5294,9 +5268,9 @@ int main(int argc, const char **argv)
             cerr << "ERROR: failed to update tier_config options"<< std::endl;
           }
         }
-        if (tier_config_rm.size() > 0) {
+        if (admin_args.tier_config_rm.size() > 0) {
           JSONFormattable tconfig;
-          for (auto add : tier_config_rm) {
+          for (auto add : admin_args.tier_config_rm) {
             int r = tconfig.set(add.first, add.second);
             if (r < 0) {
               cerr << "ERROR: failed to set configurable: " << add << std::endl;
@@ -5377,7 +5351,7 @@ int main(int argc, const char **argv)
         zone.system_key.id = admin_args.access_key;
         zone.system_key.key = admin_args.secret_key;
 	zone.realm_id = admin_args.realm_id;
-        for (auto a : tier_config_add) {
+        for (auto a : admin_args.tier_config_add) {
           int r = zone.tier_config.set(a.first, a.second);
           if (r < 0) {
             cerr << "ERROR: failed to set configurable: " << a << std::endl;
@@ -5392,7 +5366,7 @@ int main(int argc, const char **argv)
 	}
 
 	if (!admin_args.zonegroup_id.empty() || !admin_args.zonegroup_name.empty()) {
-          string *ptier_type = (tier_type_specified ? &tier_type : nullptr);
+          string *ptier_type = safe_opt_ptr(admin_args.opt_tier_type);
 	  bool *psync_from_all = safe_opt_ptr(admin_args.sync_from_all);
           string *predirect_zone = safe_opt_ptr(admin_args.opt_redirect_zone);
           if (enable_features.empty()) { // enable all features by default
@@ -5407,7 +5381,7 @@ int main(int argc, const char **argv)
                                    ptier_type,
                                    psync_from_all,
                                    admin_args.sync_from, admin_args.sync_from_rm,
-                                   predirect_zone, bucket_index_max_shards,
+                                   predirect_zone, admin_args.bucket_index_max_shards,
 				   static_cast<rgw::sal::RadosStore*>(store)->svc()->sync_modules->get_manager(),
                                    enable_features, disable_features, null_yield);
 	  if (ret < 0) {
@@ -5645,8 +5619,8 @@ int main(int argc, const char **argv)
           need_zone_update = true;
         }
 
-        if (tier_config_add.size() > 0) {
-          for (auto add : tier_config_add) {
+        if (admin_args.tier_config_add.size() > 0) {
+          for (auto add : admin_args.tier_config_add) {
             int r = zone.tier_config.set(add.first, add.second);
             if (r < 0) {
               cerr << "ERROR: failed to set configurable: " << add << std::endl;
@@ -5656,7 +5630,7 @@ int main(int argc, const char **argv)
           need_zone_update = true;
         }
 
-        for (auto rm : tier_config_rm) {
+        for (auto rm : admin_args.tier_config_rm) {
           if (!rm.first.empty()) { /* otherwise will remove the entire config */
             zone.tier_config.erase(rm.first);
             need_zone_update = true;
@@ -5677,7 +5651,7 @@ int main(int argc, const char **argv)
 	  cerr << "failed to init zonegroup: " << cpp_strerror(-ret) << std::endl;
 	  return -ret;
 	}
-        string *ptier_type = (tier_type_specified ? &tier_type : nullptr);
+        string *ptier_type = safe_opt_ptr(admin_args.opt_tier_type);
 
 	bool *psync_from_all = safe_opt_ptr(admin_args.sync_from_all);
         string *predirect_zone = safe_opt_ptr(admin_args.opt_redirect_zone);
@@ -5687,7 +5661,7 @@ int main(int argc, const char **argv)
                                  safe_opt_ptr(admin_args.opt_read_only),
                                  admin_args.endpoints, ptier_type,
                                  psync_from_all, admin_args.sync_from, admin_args.sync_from_rm,
-                                 predirect_zone, bucket_index_max_shards,
+                                 predirect_zone, admin_args.bucket_index_max_shards,
 				 static_cast<rgw::sal::RadosStore*>(store)->svc()->sync_modules->get_manager(),
                                  enable_features, disable_features, null_yield);
 	if (ret < 0) {
@@ -7028,171 +7002,6 @@ next:
     admin_args.formatter->flush(cout);
   }
 
-  if (opt_cmd == OPT::BI_GET) {
-    if (admin_args.bucket_name.empty()) {
-      cerr << "ERROR: bucket name not specified" << std::endl;
-      return EINVAL;
-    }
-    if (admin_args.object.empty()) {
-      cerr << "ERROR: object not specified" << std::endl;
-      return EINVAL;
-    }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
-    if (ret < 0) {
-      cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-    rgw_obj obj(bucket->get_key(), admin_args.object);
-    if (!admin_args.object_version.empty()) {
-      obj.key.set_instance(admin_args.object_version);
-    }
-
-    rgw_cls_bi_entry entry;
-
-    ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->bi_get(dpp(), bucket->get_info(), obj, bi_index_type, &entry);
-    if (ret < 0) {
-      cerr << "ERROR: bi_get(): " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-
-    encode_json("entry", entry, admin_args.formatter.get());
-    admin_args.formatter->flush(cout);
-  }
-
-  if (opt_cmd == OPT::BI_PUT) {
-    if (admin_args.bucket_name.empty()) {
-      cerr << "ERROR: bucket name not specified" << std::endl;
-      return EINVAL;
-    }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
-    if (ret < 0) {
-      cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-
-    rgw_cls_bi_entry entry;
-    cls_rgw_obj_key key;
-    ret = read_decode_json(admin_args.infile, entry, &key);
-    if (ret < 0) {
-      return 1;
-    }
-
-    rgw_obj obj(bucket->get_key(), key);
-
-    ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->bi_put(dpp(), bucket->get_key(), obj, entry);
-    if (ret < 0) {
-      cerr << "ERROR: bi_put(): " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-  }
-
-  if (opt_cmd == OPT::BI_LIST) {
-    if (admin_args.bucket_name.empty()) {
-      cerr << "ERROR: bucket name not specified" << std::endl;
-      return EINVAL;
-    }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
-    if (ret < 0) {
-      cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-
-    list<rgw_cls_bi_entry> entries;
-    bool is_truncated;
-    if (admin_args.max_entries < 0) {
-      admin_args.max_entries = 1000;
-    }
-
-    const auto& index = bucket->get_info().layout.current_index;
-    const int max_shards = rgw::num_shards(index);
-
-    admin_args.formatter->open_array_section("entries");
-
-    int i = safe_opt(admin_args.shard_id);
-    for (; i < max_shards; i++) {
-      RGWRados::BucketShard bs(static_cast<rgw::sal::RadosStore*>(store)->getRados());
-      int ret = bs.init(dpp(), bucket->get_info(), index, i);
-      admin_args.marker.clear();
-
-      if (ret < 0) {
-        cerr << "ERROR: bs.init(bucket=" << bucket << ", shard=" << i << "): " << cpp_strerror(-ret) << std::endl;
-        return -ret;
-      }
-
-      do {
-        entries.clear();
-	// if object is specified, we use that as a filter to only retrieve some some entries
-        ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->bi_list(bs, admin_args.object, admin_args.marker, admin_args.max_entries, &entries, &is_truncated);
-        if (ret < 0) {
-          cerr << "ERROR: bi_list(): " << cpp_strerror(-ret) << std::endl;
-          return -ret;
-        }
-
-        list<rgw_cls_bi_entry>::iterator iter;
-        for (iter = entries.begin(); iter != entries.end(); ++iter) {
-          rgw_cls_bi_entry& entry = *iter;
-          encode_json("entry", entry, admin_args.formatter.get());
-          admin_args.marker = entry.idx;
-        }
-        admin_args.formatter->flush(cout);
-      } while (is_truncated);
-      admin_args.formatter->flush(cout);
-
-      if (admin_args.shard_id)
-        break;
-    }
-    admin_args.formatter->close_section();
-    admin_args.formatter->flush(cout);
-  }
-
-  if (opt_cmd == OPT::BI_PURGE) {
-    if (admin_args.bucket_name.empty()) {
-      cerr << "ERROR: bucket name not specified" << std::endl;
-      return EINVAL;
-    }
-    int ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, admin_args.bucket_id, &bucket);
-    if (ret < 0) {
-      cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    }
-
-    std::unique_ptr<rgw::sal::Bucket> cur_bucket;
-    ret = init_bucket(admin_args.user.get(), admin_args.tenant, admin_args.bucket_name, string(), &cur_bucket);
-    if (ret == -ENOENT) {
-      // no bucket entrypoint
-    } else if (ret < 0) {
-      cerr << "ERROR: could not init current bucket info for bucket_name=" << admin_args.bucket_name << ": " << cpp_strerror(-ret) << std::endl;
-      return -ret;
-    } else if (cur_bucket->get_bucket_id() == bucket->get_bucket_id() &&
-               !admin_args.yes_i_really_mean_it) {
-      cerr << "specified bucket instance points to a current bucket instance" << std::endl;
-      cerr << "do you really mean it? (requires --yes-i-really-mean-it)" << std::endl;
-      return EINVAL;
-    }
-
-    const auto& index = bucket->get_info().layout.current_index;
-    if (index.layout.type == rgw::BucketIndexType::Indexless) {
-      cerr << "ERROR: indexless bucket has no index to purge" << std::endl;
-      return EINVAL;
-    }
-
-    const int max_shards = rgw::num_shards(index);
-    for (int i = 0; i < max_shards; i++) {
-      RGWRados::BucketShard bs(static_cast<rgw::sal::RadosStore*>(store)->getRados());
-      int ret = bs.init(dpp(), bucket->get_info(), index, i);
-      if (ret < 0) {
-        cerr << "ERROR: bs.init(bucket=" << bucket << ", shard=" << i << "): " << cpp_strerror(-ret) << std::endl;
-        return -ret;
-      }
-
-      ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->bi_remove(dpp(), bs);
-      if (ret < 0) {
-        cerr << "ERROR: failed to remove bucket index object: " << cpp_strerror(-ret) << std::endl;
-        return -ret;
-      }
-    }
-  }
-
   if (opt_cmd == OPT::OBJECT_PUT) {
     if (admin_args.bucket_name.empty()) {
       cerr << "ERROR: bucket not specified" << std::endl;
@@ -8303,11 +8112,11 @@ next:
   }
 
   if (opt_cmd == OPT::DATA_SYNC_STATUS) {
-    if (source_zone.empty()) {
+    if (admin_args.source_zone.empty()) {
       cerr << "ERROR: source zone not specified" << std::endl;
       return EINVAL;
     }
-    RGWDataSyncStatusManager sync(static_cast<rgw::sal::RadosStore*>(store), static_cast<rgw::sal::RadosStore*>(store)->svc()->rados->get_async_processor(), source_zone, nullptr);
+    RGWDataSyncStatusManager sync(static_cast<rgw::sal::RadosStore*>(store), static_cast<rgw::sal::RadosStore*>(store)->svc()->rados->get_async_processor(), admin_args.source_zone, nullptr);
 
     int ret = sync.init(dpp());
     if (ret < 0) {
@@ -8372,12 +8181,12 @@ next:
   }
 
   if (opt_cmd == OPT::DATA_SYNC_INIT) {
-    if (source_zone.empty()) {
+    if (admin_args.source_zone.empty()) {
       cerr << "ERROR: source zone not specified" << std::endl;
       return EINVAL;
     }
 
-    RGWDataSyncStatusManager sync(static_cast<rgw::sal::RadosStore*>(store), static_cast<rgw::sal::RadosStore*>(store)->svc()->rados->get_async_processor(), source_zone, nullptr);
+    RGWDataSyncStatusManager sync(static_cast<rgw::sal::RadosStore*>(store), static_cast<rgw::sal::RadosStore*>(store)->svc()->rados->get_async_processor(), admin_args.source_zone, nullptr);
 
     int ret = sync.init(dpp());
     if (ret < 0) {
@@ -8393,7 +8202,7 @@ next:
   }
 
   if (opt_cmd == OPT::DATA_SYNC_RUN) {
-    if (source_zone.empty()) {
+    if (admin_args.source_zone.empty()) {
       cerr << "ERROR: source zone not specified" << std::endl;
       return EINVAL;
     }
@@ -8406,7 +8215,7 @@ next:
       return ret;
     }
 
-    RGWDataSyncStatusManager sync(static_cast<rgw::sal::RadosStore*>(store), static_cast<rgw::sal::RadosStore*>(store)->svc()->rados->get_async_processor(), source_zone, nullptr, sync_module);
+    RGWDataSyncStatusManager sync(static_cast<rgw::sal::RadosStore*>(store), static_cast<rgw::sal::RadosStore*>(store)->svc()->rados->get_async_processor(), admin_args.source_zone, nullptr, sync_module);
 
     ret = sync.init(dpp());
     if (ret < 0) {
@@ -8422,7 +8231,7 @@ next:
   }
 
   if (opt_cmd == OPT::BUCKET_SYNC_INIT) {
-    if (source_zone.empty()) {
+    if (admin_args.source_zone.empty()) {
       cerr << "ERROR: source zone not specified" << std::endl;
       return EINVAL;
     }
@@ -8446,7 +8255,7 @@ next:
     }
 
     auto sync = RGWBucketPipeSyncStatusManager::construct(
-      dpp(), static_cast<rgw::sal::RadosStore*>(store), source_zone, opt_sb,
+      dpp(), static_cast<rgw::sal::RadosStore*>(store), admin_args.source_zone, opt_sb,
       bucket->get_key(), admin_args.extra_info ? &std::cout : nullptr);
 
     if (!sync) {
@@ -8462,8 +8271,8 @@ next:
 
   if (opt_cmd == OPT::BUCKET_SYNC_CHECKPOINT) {
     std::optional<rgw_zone_id> opt_source_zone;
-    if (!source_zone.empty()) {
-      opt_source_zone = source_zone;
+    if (!admin_args.source_zone.empty()) {
+      opt_source_zone = admin_args.source_zone;
     }
     if (admin_args.bucket_name.empty()) {
       cerr << "ERROR: bucket not specified" << std::endl;
@@ -8537,11 +8346,11 @@ next:
     if (ret < 0) {
       return -ret;
     }
-    bucket_sync_status(store, bucket->get_info(), source_zone, opt_source_bucket, std::cout);
+    bucket_sync_status(store, bucket->get_info(), admin_args.source_zone, opt_source_bucket, std::cout);
   }
 
   if (opt_cmd == OPT::BUCKET_SYNC_MARKERS) {
-    if (source_zone.empty()) {
+    if (admin_args.source_zone.empty()) {
       cerr << "ERROR: source zone not specified" << std::endl;
       return EINVAL;
     }
@@ -8554,7 +8363,7 @@ next:
       return -ret;
     }
     auto sync = RGWBucketPipeSyncStatusManager::construct(
-      dpp(), static_cast<rgw::sal::RadosStore*>(store), source_zone,
+      dpp(), static_cast<rgw::sal::RadosStore*>(store), admin_args.source_zone,
       opt_source_bucket, bucket->get_key(), nullptr);
 
     if (!sync) {
@@ -8574,7 +8383,7 @@ next:
   }
 
   if (opt_cmd == OPT::BUCKET_SYNC_RUN) {
-    if (source_zone.empty()) {
+    if (admin_args.source_zone.empty()) {
       cerr << "ERROR: source zone not specified" << std::endl;
       return EINVAL;
     }
@@ -8587,7 +8396,7 @@ next:
       return -ret;
     }
     auto sync = RGWBucketPipeSyncStatusManager::construct(
-      dpp(), static_cast<rgw::sal::RadosStore*>(store), source_zone,
+      dpp(), static_cast<rgw::sal::RadosStore*>(store), admin_args.source_zone,
       opt_source_bucket, bucket->get_key(), admin_args.extra_info ? &std::cout : nullptr);
 
     if (!sync) {
@@ -9334,12 +9143,12 @@ next:
   }
 
   if (opt_cmd == OPT::DATALOG_TYPE) {
-    if (!opt_log_type) {
+    if (!admin_args.opt_log_type) {
       std::cerr << "log-type not specified." << std::endl;
       return -EINVAL;
     }
     auto datalog = static_cast<rgw::sal::RadosStore*>(store)->svc()->datalog_rados;
-    ret = datalog->change_format(dpp(), *opt_log_type, null_yield);
+    ret = datalog->change_format(dpp(), *admin_args.opt_log_type, null_yield);
     if (ret < 0) {
       cerr << "ERROR: change_format(): " << cpp_strerror(-ret) << std::endl;
       return -ret;
@@ -9787,6 +9596,10 @@ static SimpleCmd::Commands radosstore_cmds = {
   { "mfa list", CMD(OPT::MFA_LIST, false, false, false, false) },
   { "mfa check", CMD(OPT::MFA_CHECK, false, false, false, false) },
   { "mfa resync", CMD(OPT::MFA_RESYNC, false, false, false, true) },
+  { "bi get", CMD(OPT::BI_GET, false, true, false, false) },
+  { "bi put", CMD(OPT::BI_PUT, false, false, false, false) },
+  { "bi list", CMD(OPT::BI_LIST, false, true, false, false) },
+  { "bi purge", CMD(OPT::BI_PURGE, false, false, false, false) },
 };
 
 void AdminStoreRados::add_cmds(SimpleCmd* cmd)
@@ -9799,6 +9612,7 @@ int AdminStoreRados::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs*
   int ret;
   rgw_pool pool;
   RGWObjVersionTracker objv_tracker;
+  std::unique_ptr<rgw::sal::Bucket> bucket;
 
   if (!admin_args->pool_name.empty())
     pool = rgw_pool(admin_args->pool_name);
@@ -10046,7 +9860,7 @@ int AdminStoreRados::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs*
     }
   }
 
- if (opt_cmd == OPT::MFA_REMOVE) {
+  if (opt_cmd == OPT::MFA_REMOVE) {
     if (rgw::sal::User::empty(admin_args->user)) {
       cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
       return EINVAL;
@@ -10082,7 +9896,7 @@ int AdminStoreRados::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs*
     }
   }
 
- if (opt_cmd == OPT::MFA_GET) {
+  if (opt_cmd == OPT::MFA_GET) {
     if (rgw::sal::User::empty(admin_args->user)) {
       cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
       return EINVAL;
@@ -10109,7 +9923,7 @@ int AdminStoreRados::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs*
     admin_args->formatter->flush(cout);
   }
 
- if (opt_cmd == OPT::MFA_LIST) {
+  if (opt_cmd == OPT::MFA_LIST) {
     if (rgw::sal::User::empty(admin_args->user)) {
       cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
       return EINVAL;
@@ -10127,7 +9941,7 @@ int AdminStoreRados::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs*
     admin_args->formatter->flush(cout);
   }
 
- if (opt_cmd == OPT::MFA_CHECK) {
+  if (opt_cmd == OPT::MFA_CHECK) {
     if (rgw::sal::User::empty(admin_args->user)) {
       cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
       return EINVAL;
@@ -10153,7 +9967,7 @@ int AdminStoreRados::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs*
     cout << "ok" << std::endl;
   }
 
- if (opt_cmd == OPT::MFA_RESYNC) {
+  if (opt_cmd == OPT::MFA_RESYNC) {
     if (rgw::sal::User::empty(admin_args->user)) {
       cerr << "ERROR: user id was not provided (via --uid)" << std::endl;
       return EINVAL;
@@ -10215,8 +10029,180 @@ int AdminStoreRados::process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs*
       cerr << "MFA update failed, error: " << cpp_strerror(-ret) << std::endl;
       return -ret;
     }
+  }
 
- }
+  if (opt_cmd == OPT::BI_GET) {
+    if (admin_args->bucket_name.empty()) {
+      cerr << "ERROR: bucket name not specified" << std::endl;
+      return EINVAL;
+    }
+    if (admin_args->object.empty()) {
+      cerr << "ERROR: object not specified" << std::endl;
+      return EINVAL;
+    }
+    BIIndexType bi_index_type = BIIndexType::Plain;
+    if (!admin_args->index_type_str.empty()) {
+      bi_index_type = get_bi_index_type(admin_args->index_type_str);
+      if (bi_index_type == BIIndexType::Invalid) {
+	cerr << "ERROR: invalid bucket index entry type" << std::endl;
+	return EINVAL;
+      }
+    }
+    int ret = init_bucket(admin_args->user.get(), admin_args->tenant, admin_args->bucket_name, admin_args->bucket_id, &bucket);
+    if (ret < 0) {
+      cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+    rgw_obj obj(bucket->get_key(), admin_args->object);
+    if (!admin_args->object_version.empty()) {
+      obj.key.set_instance(admin_args->object_version);
+    }
+
+    rgw_cls_bi_entry entry;
+
+    ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->bi_get(dpp(), bucket->get_info(), obj, bi_index_type, &entry);
+    if (ret < 0) {
+      cerr << "ERROR: bi_get(): " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+
+    encode_json("entry", entry, admin_args->formatter.get());
+    admin_args->formatter->flush(cout);
+  }
+
+  if (opt_cmd == OPT::BI_PUT) {
+    if (admin_args->bucket_name.empty()) {
+      cerr << "ERROR: bucket name not specified" << std::endl;
+      return EINVAL;
+    }
+    int ret = init_bucket(admin_args->user.get(), admin_args->tenant, admin_args->bucket_name, admin_args->bucket_id, &bucket);
+    if (ret < 0) {
+      cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+
+    rgw_cls_bi_entry entry;
+    cls_rgw_obj_key key;
+    ret = read_decode_json(admin_args->infile, entry, &key);
+    if (ret < 0) {
+      return 1;
+    }
+
+    rgw_obj obj(bucket->get_key(), key);
+
+    ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->bi_put(dpp(), bucket->get_key(), obj, entry);
+    if (ret < 0) {
+      cerr << "ERROR: bi_put(): " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+  }
+
+  if (opt_cmd == OPT::BI_LIST) {
+    if (admin_args->bucket_name.empty()) {
+      cerr << "ERROR: bucket name not specified" << std::endl;
+      return EINVAL;
+    }
+    int ret = init_bucket(admin_args->user.get(), admin_args->tenant, admin_args->bucket_name, admin_args->bucket_id, &bucket);
+    if (ret < 0) {
+      cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+
+    list<rgw_cls_bi_entry> entries;
+    bool is_truncated;
+    if (admin_args->max_entries < 0) {
+      admin_args->max_entries = 1000;
+    }
+
+    const auto& index = bucket->get_info().layout.current_index;
+    const int max_shards = rgw::num_shards(index);
+
+    admin_args->formatter->open_array_section("entries");
+
+    int i = safe_opt(admin_args->shard_id);
+    for (; i < max_shards; i++) {
+      RGWRados::BucketShard bs(static_cast<rgw::sal::RadosStore*>(store)->getRados());
+      int ret = bs.init(dpp(), bucket->get_info(), index, i);
+      admin_args->marker.clear();
+
+      if (ret < 0) {
+        cerr << "ERROR: bs.init(bucket=" << bucket << ", shard=" << i << "): " << cpp_strerror(-ret) << std::endl;
+        return -ret;
+      }
+
+      do {
+        entries.clear();
+	// if object is specified, we use that as a filter to only retrieve some some entries
+        ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->bi_list(bs, admin_args->object, admin_args->marker, admin_args->max_entries, &entries, &is_truncated);
+        if (ret < 0) {
+          cerr << "ERROR: bi_list(): " << cpp_strerror(-ret) << std::endl;
+          return -ret;
+        }
+
+        list<rgw_cls_bi_entry>::iterator iter;
+        for (iter = entries.begin(); iter != entries.end(); ++iter) {
+          rgw_cls_bi_entry& entry = *iter;
+          encode_json("entry", entry, admin_args->formatter.get());
+          admin_args->marker = entry.idx;
+        }
+        admin_args->formatter->flush(cout);
+      } while (is_truncated);
+      admin_args->formatter->flush(cout);
+
+      if (admin_args->shard_id)
+        break;
+    }
+    admin_args->formatter->close_section();
+    admin_args->formatter->flush(cout);
+  }
+
+  if (opt_cmd == OPT::BI_PURGE) {
+    if (admin_args->bucket_name.empty()) {
+      cerr << "ERROR: bucket name not specified" << std::endl;
+      return EINVAL;
+    }
+    int ret = init_bucket(admin_args->user.get(), admin_args->tenant, admin_args->bucket_name, admin_args->bucket_id, &bucket);
+    if (ret < 0) {
+      cerr << "ERROR: could not init bucket: " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    }
+
+    std::unique_ptr<rgw::sal::Bucket> cur_bucket;
+    ret = init_bucket(admin_args->user.get(), admin_args->tenant, admin_args->bucket_name, string(), &cur_bucket);
+    if (ret == -ENOENT) {
+      // no bucket entrypoint
+    } else if (ret < 0) {
+      cerr << "ERROR: could not init current bucket info for bucket_name=" << admin_args->bucket_name << ": " << cpp_strerror(-ret) << std::endl;
+      return -ret;
+    } else if (cur_bucket->get_bucket_id() == bucket->get_bucket_id() &&
+               !admin_args->yes_i_really_mean_it) {
+      cerr << "specified bucket instance points to a current bucket instance" << std::endl;
+      cerr << "do you really mean it? (requires --yes-i-really-mean-it)" << std::endl;
+      return EINVAL;
+    }
+
+    const auto& index = bucket->get_info().layout.current_index;
+    if (index.layout.type == rgw::BucketIndexType::Indexless) {
+      cerr << "ERROR: indexless bucket has no index to purge" << std::endl;
+      return EINVAL;
+    }
+
+    const int max_shards = rgw::num_shards(index);
+    for (int i = 0; i < max_shards; i++) {
+      RGWRados::BucketShard bs(static_cast<rgw::sal::RadosStore*>(store)->getRados());
+      int ret = bs.init(dpp(), bucket->get_info(), index, i);
+      if (ret < 0) {
+        cerr << "ERROR: bs.init(bucket=" << bucket << ", shard=" << i << "): " << cpp_strerror(-ret) << std::endl;
+        return -ret;
+      }
+
+      ret = static_cast<rgw::sal::RadosStore*>(store)->getRados()->bi_remove(dpp(), bs);
+      if (ret < 0) {
+        cerr << "ERROR: failed to remove bucket index object: " << cpp_strerror(-ret) << std::endl;
+        return -ret;
+      }
+    }
+  }
 
   return 0;
 }

@@ -279,6 +279,13 @@ struct AdminArgs {
   uint64_t min_rewrite_size{4 * 1024 * 1024};
   uint64_t max_rewrite_size{ULLONG_MAX};
   uint64_t min_rewrite_stripe_size{0};
+  std::string index_type_str;
+  std::optional<log_type> opt_log_type;
+  std::optional<int> bucket_index_max_shards;
+  rgw_zone_id source_zone;
+  std::optional<std::string> opt_tier_type;
+  std::map<std::string, std::string, ltstr_nocase> tier_config_add;
+  std::map<std::string, std::string, ltstr_nocase> tier_config_rm;
   
   int yes_i_really_mean_it{false};
 };
