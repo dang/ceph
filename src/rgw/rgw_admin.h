@@ -22,6 +22,7 @@
 #include "common/Formatter.h"
 #include "rgw_sal.h"
 #include "rgw_user.h"
+#include "rgw_bucket_layout.h"
 
 
 namespace rgw_admin {
@@ -286,6 +287,40 @@ struct AdminArgs {
   std::optional<std::string> opt_tier_type;
   std::map<std::string, std::string, ltstr_nocase> tier_config_add;
   std::map<std::string, std::string, ltstr_nocase> tier_config_rm;
+  std::optional<std::string> opt_index_pool;
+  std::optional<std::string> opt_data_pool;
+  std::optional<std::string> opt_data_extra_pool;
+  std::optional<rgw::BucketIndexType> opt_placement_index_type = rgw::BucketIndexType::Normal;
+  std::optional<std::string> compression_type;
+  std::string topic_name;
+  std::string sub_name;
+  std::string event_id;
+  std::optional<uint64_t> gen;
+  int trim_delay_ms{0};
+  std::optional<std::string> str_script_ctx;
+  std::optional<std::string> script_package;
+  int allow_compilation{false};
+  std::optional<std::string> opt_group_id;
+  std::optional<std::string> opt_status;
+  std::optional<std::string> opt_flow_type;
+  std::optional<std::vector<rgw_zone_id> > opt_zone_ids;
+  std::optional<std::string> opt_flow_id;
+  std::optional<std::string> opt_source_zone_name;
+  std::optional<rgw_zone_id> opt_source_zone_id;
+  std::optional<rgw_zone_id> opt_dest_zone_id;
+  std::optional<std::vector<rgw_zone_id> > opt_source_zone_ids;
+  std::optional<std::vector<rgw_zone_id> > opt_dest_zone_ids;
+  std::optional<std::string> opt_pipe_id;
+  std::optional<rgw_bucket> opt_bucket;
+  std::optional<rgw_bucket> opt_source_bucket;
+  std::optional<std::string> opt_source_tenant;
+  std::optional<std::string> opt_source_bucket_name;
+  std::optional<std::string> opt_source_bucket_id;
+  std::optional<rgw_bucket> opt_dest_bucket;
+  std::optional<std::string> opt_dest_tenant;
+  std::optional<std::string> opt_dest_bucket_name;
+  std::optional<std::string> opt_dest_bucket_id;
+  std::optional<rgw_zone_id> opt_effective_zone_id;
   
   int yes_i_really_mean_it{false};
 };
