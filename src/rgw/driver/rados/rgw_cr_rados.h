@@ -35,7 +35,7 @@ public:
   RGWAsyncRadosRequest(RGWCoroutine *_caller, RGWAioCompletionNotifier *_cn)
     : caller(_caller), notifier(_cn), retcode(0) {
   }
-  ~RGWAsyncRadosRequest() override {
+  virtual ~RGWAsyncRadosRequest() override {
     if (notifier) {
       notifier->put();
     }
@@ -106,7 +106,7 @@ protected:
 
 public:
   RGWAsyncRadosProcessor(CephContext *_cct, int num_threads);
-  ~RGWAsyncRadosProcessor() {}
+  virtual ~RGWAsyncRadosProcessor() {}
   void start();
   void stop();
   void handle_request(const DoutPrefixProvider *dpp, RGWAsyncRadosRequest *req);
@@ -153,7 +153,7 @@ class RGWSimpleWriteOnlyAsyncCR : public RGWSimpleCoroutine {
 				                params(_params),
                                                 dpp(_dpp) {}
 
-  ~RGWSimpleWriteOnlyAsyncCR() override {
+  virtual ~RGWSimpleWriteOnlyAsyncCR() override {
     request_cleanup();
   }
   void request_cleanup() override {
@@ -221,7 +221,7 @@ class RGWSimpleAsyncCR : public RGWSimpleCoroutine {
                                                   result(_result),
                                                   dpp(_dpp) {}
 
-  ~RGWSimpleAsyncCR() override {
+  virtual ~RGWSimpleAsyncCR() override {
     request_cleanup();
   }
   void request_cleanup() override {
@@ -293,7 +293,7 @@ private:
                                                   async_rados(_async_rados),
                                                   action(std::static_pointer_cast<Action>(_action)) {}
 
-  ~RGWGenericAsyncCR() override {
+  virtual ~RGWGenericAsyncCR() override {
     request_cleanup();
   }
   void request_cleanup() override {
@@ -422,7 +422,7 @@ public:
     : RGWSimpleCoroutine(_svc->ctx()), dpp(_dpp), async_rados(_async_rados), svc(_svc),
       obj(_obj), result(_result),
       empty_on_enoent(empty_on_enoent), objv_tracker(objv_tracker) {}
-  ~RGWSimpleRadosReadCR() override {
+  virtual ~RGWSimpleRadosReadCR() override {
     request_cleanup();
   }
 
@@ -506,7 +506,7 @@ public:
       raw_attrs(_raw_attrs),
       objv_tracker(objv_tracker)
   {}
-  ~RGWSimpleRadosReadAttrsCR() override {
+  virtual ~RGWSimpleRadosReadAttrsCR() override {
     request_cleanup();
   }
                                                          
@@ -543,7 +543,7 @@ public:
     encode(_data, bl);
   }
 
-  ~RGWSimpleRadosWriteCR() override {
+  virtual ~RGWSimpleRadosWriteCR() override {
     request_cleanup();
   }
 
@@ -591,7 +591,7 @@ public:
       svc(_svc), objv_tracker(objv_tracker), obj(_obj),
       attrs(std::move(_attrs)), exclusive(exclusive) {
   }
-  ~RGWSimpleRadosWriteAttrsCR() override {
+  virtual ~RGWSimpleRadosWriteAttrsCR() override {
     request_cleanup();
   }
 
@@ -763,7 +763,7 @@ public:
                       const std::string& _lock_name,
 		      const std::string& _cookie,
 		      uint32_t _duration);
-  ~RGWSimpleRadosLockCR() override {
+  virtual ~RGWSimpleRadosLockCR() override {
     request_cleanup();
   }
   void request_cleanup() override;
@@ -794,7 +794,7 @@ public:
 		      const rgw_raw_obj& _obj, 
                       const std::string& _lock_name,
 		      const std::string& _cookie);
-  ~RGWSimpleRadosUnlockCR() override {
+  virtual ~RGWSimpleRadosUnlockCR() override {
     request_cleanup();
   }
   void request_cleanup() override;
@@ -861,7 +861,7 @@ public:
     }
   }
 
-  ~RGWShardedOmapCRManager() {
+  virtual ~RGWShardedOmapCRManager() {
     for (auto shard : shards) {
       shard->put();
     }
@@ -895,6 +895,8 @@ public:
                                 rgw::sal::RadosStore* _store, const rgw_bucket& bucket,
                                 const DoutPrefixProvider *dpp)
     : RGWAsyncRadosRequest(caller, cn), store(_store), bucket(bucket), dpp(dpp) {}
+
+  virtual ~RGWAsyncGetBucketInstanceInfo() {}
 
   RGWBucketInfo bucket_info;
   std::map<std::string, bufferlist> attrs;
@@ -940,7 +942,7 @@ public:
                              std::map<std::string, bufferlist> *_pattrs, const DoutPrefixProvider *dpp)
     : RGWSimpleCoroutine(_store->ctx()), async_rados(_async_rados), store(_store),
       bucket(_bucket), bucket_info(_bucket_info), pattrs(_pattrs), dpp(dpp) {}
-  ~RGWGetBucketInstanceInfoCR() override {
+  virtual ~RGWGetBucketInstanceInfoCR() override {
     request_cleanup();
   }
   void request_cleanup() override {
@@ -1088,6 +1090,8 @@ public:
       zones_trace = *_zones_trace;
     }
   }
+
+  virtual ~RGWAsyncFetchRemoteObj() {}
 };
 
 class RGWFetchRemoteObjCR : public RGWSimpleCoroutine {
@@ -1147,7 +1151,7 @@ public:
       zones_trace(_zones_trace), counters(counters), dpp(dpp) {}
 
 
-  ~RGWFetchRemoteObjCR() override {
+  virtual ~RGWFetchRemoteObjCR() override {
     request_cleanup();
   }
 
@@ -1205,6 +1209,8 @@ public:
                                                       petag(_petag),
                                                       pattrs(_pattrs),
                                                       pheaders(_pheaders) {}
+
+  virtual ~RGWAsyncStatRemoteObj() {}
 };
 
 class RGWStatRemoteObjCR : public RGWSimpleCoroutine {
@@ -1246,7 +1252,7 @@ public:
                                        req(NULL) {}
 
 
-  ~RGWStatRemoteObjCR() override {
+  virtual ~RGWStatRemoteObjCR() override {
     request_cleanup();
   }
 
@@ -1320,6 +1326,8 @@ public:
     store->get_bucket(nullptr, _bucket_info, &bucket);
     obj = bucket->get_object(_key);
   }
+
+  virtual ~RGWAsyncRemoveObj() {}
 };
 
 class RGWRemoveObjCR : public RGWSimpleCoroutine {
@@ -1377,7 +1385,7 @@ public:
       owner_display_name = *_owner_display_name;
     }
   }
-  ~RGWRemoveObjCR() override {
+  virtual ~RGWRemoveObjCR() override {
     request_cleanup();
   }
 
@@ -1548,7 +1556,7 @@ class RGWStatObjCR : public RGWSimpleCoroutine {
 	  const RGWBucketInfo& _bucket_info, const rgw_obj& obj, uint64_t *psize = nullptr,
 	  real_time* pmtime = nullptr, uint64_t *pepoch = nullptr,
 	  RGWObjVersionTracker *objv_tracker = nullptr);
-  ~RGWStatObjCR() override {
+  virtual ~RGWStatObjCR() override {
     request_cleanup();
   }
   void request_cleanup() override;

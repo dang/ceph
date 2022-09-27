@@ -7,8 +7,6 @@ using namespace std;
 
 const std::string MP_META_SUFFIX = ".meta";
 
-MultipartMetaFilter::~MultipartMetaFilter() {}
-
 bool MultipartMetaFilter::filter(const string& name, string& key) {
   // the length of the suffix so we can skip past it
   static const size_t MP_META_SUFFIX_LEN = MP_META_SUFFIX.length();

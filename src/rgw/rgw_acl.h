@@ -307,7 +307,7 @@ protected:
 public:
   ACLOwner() {}
   ACLOwner(const rgw_user& _id) : id(_id) {}
-  ~ACLOwner() {}
+  virtual ~ACLOwner() {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(3, 2, bl);

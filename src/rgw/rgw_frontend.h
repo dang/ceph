@@ -100,7 +100,7 @@ public:
     : conf(_conf), pprocess(nullptr), env(pe), thread(nullptr) {
   }
 
-  ~RGWProcessFrontend() override {
+  virtual ~RGWProcessFrontend() override {
     delete thread;
     delete pprocess;
   }

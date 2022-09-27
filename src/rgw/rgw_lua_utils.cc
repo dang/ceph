@@ -1,6 +1,6 @@
-#include <string>
-#include <lua.hpp>
-#include "common/ceph_context.h"
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab ft=cpp
+
 #include "common/dout.h"
 #include "rgw_lua_utils.h"
 #include "rgw_lua_version.h"

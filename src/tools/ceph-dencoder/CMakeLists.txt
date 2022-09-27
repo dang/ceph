@@ -58,7 +58,9 @@ if(WITH_RADOSGW)
     rgw_types.cc
     ${CMAKE_SOURCE_DIR}/src/rgw/rgw_dencoder.cc)
   target_include_directories(denc-mod-rgw
-    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/rgw")
+    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/rgw"
+    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/rgw/store/rados"
+    PRIVATE "${CMAKE_SOURCE_DIR}/src/jaegertracing/opentelemetry-cpp/api/include")
   target_link_libraries(denc-mod-rgw
     rgw_a
     cls_rgw_client

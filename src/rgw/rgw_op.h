@@ -294,7 +294,7 @@ protected:
 public:
   RGWGetObj_Filter() {}
   explicit RGWGetObj_Filter(RGWGetObj_Filter *next): next(next) {}
-  ~RGWGetObj_Filter() override {}
+  virtual ~RGWGetObj_Filter() override {}
   /**
    * Passes data through filter.
    * Filter can modify content of bl.
@@ -955,7 +955,7 @@ public:
 class RGWGetBucketLocation : public RGWOp {
 public:
   RGWGetBucketLocation() {}
-  ~RGWGetBucketLocation() override {}
+  virtual ~RGWGetBucketLocation() override {}
   int verify_permission(optional_yield y) override;
   void execute(optional_yield) override { }
 
@@ -1250,7 +1250,7 @@ public:
                 obj_retention(nullptr),
                 obj_legal_hold(nullptr) {}
 
-  ~RGWPutObj() override {
+  virtual ~RGWPutObj() override {
     delete slo_info;
     delete obj_retention;
     delete obj_legal_hold;
@@ -1554,7 +1554,7 @@ public:
     obj_legal_hold = nullptr;
   }
 
-  ~RGWCopyObj() override {
+  virtual ~RGWCopyObj() override {
     delete obj_retention;
     delete obj_legal_hold;
   }
@@ -1615,7 +1615,7 @@ protected:
 
 public:
   RGWPutACLs() {}
-  ~RGWPutACLs() override {}
+  virtual ~RGWPutACLs() override {}
 
   int verify_permission(optional_yield y) override;
   void pre_exec() override;
@@ -1634,7 +1634,7 @@ protected:
     
 public:
   RGWGetLC() { }
-  ~RGWGetLC() override { }
+  virtual ~RGWGetLC() override { }
 
   int verify_permission(optional_yield y) override;
   void pre_exec() override;
@@ -1656,7 +1656,7 @@ public:
   RGWPutLC() {
     content_md5 = nullptr;
   }
-  ~RGWPutLC() override {}
+  virtual ~RGWPutLC() override {}
 
   void init(rgw::sal::Driver* driver, req_state *s, RGWHandler *dialect_handler) override {
 #define COOKIE_LEN 16
@@ -1714,7 +1714,7 @@ protected:
 
 public:
   RGWPutCORS() {}
-  ~RGWPutCORS() override {}
+  virtual ~RGWPutCORS() override {}
 
   int verify_permission(optional_yield y) override;
   void execute(optional_yield y) override;
@@ -1767,7 +1767,7 @@ protected:
   bufferlist data;
 public:
   RGWPutBucketEncryption() = default;
-  ~RGWPutBucketEncryption() {}
+  virtual ~RGWPutBucketEncryption() {}
 
   int get_params(optional_yield y);
   int verify_permission(optional_yield y) override;
@@ -1878,7 +1878,7 @@ protected:
 
 public:
   RGWCompleteMultipart() {}
-  ~RGWCompleteMultipart() = default;
+  virtual ~RGWCompleteMultipart() = default;
 
   int verify_permission(optional_yield y) override;
   void pre_exec() override;
@@ -1984,7 +1984,7 @@ public:
 class RGWGetCrossDomainPolicy : public RGWOp {
 public:
   RGWGetCrossDomainPolicy() = default;
-  ~RGWGetCrossDomainPolicy() override = default;
+  virtual ~RGWGetCrossDomainPolicy() override = default;
 
   int verify_permission(optional_yield) override {
     return 0;
@@ -2009,7 +2009,7 @@ public:
 class RGWGetHealthCheck : public RGWOp {
 public:
   RGWGetHealthCheck() = default;
-  ~RGWGetHealthCheck() override = default;
+  virtual ~RGWGetHealthCheck() override = default;
 
   int verify_permission(optional_yield) override {
     return 0;
@@ -2092,7 +2092,7 @@ public:
 class RGWInfo: public RGWOp {
 public:
   RGWInfo() = default;
-  ~RGWInfo() override = default;
+  virtual ~RGWInfo() override = default;
 
   int verify_permission(optional_yield) override { return 0; }
   const char* name() const override { return "get info"; }
@@ -2321,7 +2321,7 @@ protected:
 
 public:
   RGWSetAttrs() {}
-  ~RGWSetAttrs() override {}
+  virtual ~RGWSetAttrs() override {}
 
   void emplace_attr(std::string&& key, buffer::list&& bl) {
     attrs.emplace(std::move(key), std::move(bl));
@@ -2440,7 +2440,7 @@ protected:
   RGWObjectLock obj_lock;
 public:
   RGWPutBucketObjectLock() = default;
-  ~RGWPutBucketObjectLock() {}
+  virtual ~RGWPutBucketObjectLock() {}
   int verify_permission(optional_yield y) override;
   void pre_exec() override;
   void execute(optional_yield y) override;

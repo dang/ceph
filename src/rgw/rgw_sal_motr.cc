@@ -455,6 +455,12 @@ int MotrUser::verify_mfa(const std::string& mfa_str, bool* verified, const DoutP
   return 0;
 }
 
+int MotrUser::verify_mfa(const std::string& mfa_str, bool* verified, const DoutPrefixProvider *dpp, optional_yield y)
+{
+  *verified = false;
+  return 0;
+}
+
 int MotrBucket::remove_bucket(const DoutPrefixProvider *dpp, bool delete_children, bool forward_to_master, req_info* req_info, optional_yield y)
 {
   int ret;
@@ -2957,6 +2963,16 @@ int MotrStore::list_all_zones(const DoutPrefixProvider* dpp,
 {
   zone_ids.push_back(zone.get_id());
     return 0;
+}
+
+int MotrStore::get_zonegroup(const std::string& id, std::unique_ptr<ZoneGroup>* group)
+{
+  /* XXX: for now only one zonegroup supported */
+  ZoneGroup* zg;
+  zg = new MotrZoneGroup(this, zone.zonegroup.get_group());
+
+  group->reset(zg);
+  return 0;
 }
 
 int MotrStore::cluster_stat(RGWClusterStat& stats)

@@ -295,7 +295,7 @@ public:
     super->pc->get();
   }
 
-  ~Completion() {
+  virtual ~Completion() {
     if (_super) {
       _super->pc->put();
     }

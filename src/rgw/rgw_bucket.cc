@@ -10,6 +10,9 @@
 // stolen from src/cls/version/cls_version.cc
 #define VERSION_ATTR "ceph.objclass.version"
 
+// seconds for timeout during RGWBucket::check_object_index
+constexpr uint64_t BUCKET_TAG_QUICK_TIMEOUT = 30;
+
 using namespace std;
 
 static void set_err_msg(std::string *sink, std::string msg)

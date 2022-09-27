@@ -2466,10 +2466,3 @@ std::string DaosStore::get_cluster_id(const DoutPrefixProvider* dpp,
 }
 
 }  // namespace rgw::sal
-
-extern "C" {
-
-void* newDaosStore(CephContext* cct) {
-  return new rgw::sal::DaosStore(cct);
-}
-}

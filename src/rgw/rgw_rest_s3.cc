@@ -4510,6 +4510,7 @@ RGWOp *RGWHandler_REST_Service_S3::op_post()
     }
   }
 
+#if 0
   if (isPSEnabled) {
     RGWHandler_REST_PSTopic_AWS topic_handler(auth_registry, post_body);
     topic_handler.init(driver, s, s->cio);
@@ -4518,6 +4519,7 @@ RGWOp *RGWHandler_REST_Service_S3::op_post()
       return op;
     }
   }
+#endif
 
   return nullptr;
 }
@@ -4583,8 +4585,10 @@ RGWOp *RGWHandler_REST_Bucket_S3::op_get()
     return new RGWGetBucketTags_ObjStore_S3;
   } else if (is_object_lock_op()) {
     return new RGWGetBucketObjectLock_ObjStore_S3;
+#if 0
   } else if (is_notification_op()) {
     return RGWHandler_REST_PSNotifs_S3::create_get_op();
+#endif
   } else if (is_replication_op()) {
     return new RGWGetBucketReplication_ObjStore_S3;
   } else if (is_policy_status_op()) {
@@ -4634,8 +4638,10 @@ RGWOp *RGWHandler_REST_Bucket_S3::op_put()
     return new RGWPutBucketPolicy;
   } else if (is_object_lock_op()) {
     return new RGWPutBucketObjectLock_ObjStore_S3;
+#if 0
   } else if (is_notification_op()) {
     return RGWHandler_REST_PSNotifs_S3::create_put_op();
+#endif
   } else if (is_replication_op()) {
     RGWBucketSyncPolicyHandlerRef sync_policy_handler;
     int ret = driver->get_sync_policy_handler(s, nullopt, nullopt,
@@ -4668,8 +4674,10 @@ RGWOp *RGWHandler_REST_Bucket_S3::op_delete()
     return new RGWDeleteLC_ObjStore_S3;
   } else if(is_policy_op()) {
     return new RGWDeleteBucketPolicy;
+#if 0
   } else if (is_notification_op()) {
     return RGWHandler_REST_PSNotifs_S3::create_delete_op();
+#endif
   } else if (is_replication_op()) {
     return new RGWDeleteBucketReplication_ObjStore_S3;
   } else if (is_block_public_access_op()) {

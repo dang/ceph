@@ -58,7 +58,7 @@ static int usage()
 /*
  * start up the RADOS connection and then handle HTTP messages as they come in
  */
-int main(int argc, char *argv[])
+int radosgw_Main(int argc, const char *argv[])
 { 
   int r{0};
 
@@ -186,3 +186,14 @@ int main(int argc, char *argv[])
 
   return 0;
 } /* main(int argc, char* argv[]) */
+
+extern "C" {
+
+int radosgw_main(int argc, const char** argv)
+{
+  return radosgw_Main(argc, argv);
+}
+
+} /* extern "C" */
+
+

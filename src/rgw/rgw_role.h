@@ -10,7 +10,7 @@
 
 #include "common/ceph_json.h"
 #include "common/ceph_context.h"
-#include "rgw/rgw_rados.h"
+#include "rgw_rados.h"
 #include "rgw_metadata.h"
 
 class RGWRados;

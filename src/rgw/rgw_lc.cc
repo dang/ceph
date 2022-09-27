@@ -620,7 +620,7 @@ public:
 
 class LCOpFilter {
 public:
-virtual ~LCOpFilter() {}
+  virtual ~LCOpFilter() {}
   virtual bool check(const DoutPrefixProvider *dpp, lc_op_ctx& oc) {
     return false;
   }
