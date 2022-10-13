@@ -17,6 +17,7 @@
 #pragma once
 
 #include "rgw_service.h"
+#include "driver/rados/rgw_bucket.h"
 
 #include "svc_meta_be.h"
 #include "svc_user.h"
@@ -30,8 +31,6 @@ class RGWSI_SyncModules;
 class RGWSI_MetaBackend_Handler;
 
 struct rgw_cache_entry_info;
-
-class RGWUserBuckets;
 
 class RGWGetUserHeader_CB;
 class RGWGetUserStats_CB;

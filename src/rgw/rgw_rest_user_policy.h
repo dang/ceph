@@ -14,7 +14,7 @@ protected:
   bool validate_input();
 
 public:
-  virtual ~RGWRestUserPolicy() {}
+  virtual ~RGWRestUserPolicy() override = default;
   int verify_permission(optional_yield y) override;
   virtual uint64_t get_op() = 0;
   void send_response() override;

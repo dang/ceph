@@ -97,9 +97,6 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
   rgw::sal::Driver* store = nullptr;
   void *dl = nullptr;
   rgw::sal::Driver *(*newDriver)(const DoutPrefixProvider *, CephContext *, bool, bool, bool, bool, bool, bool, bool, bool) = nullptr;
-  if (cfg.store_name.compare("d3n") == 0) {
-    dlname = "/usr/lib64/ceph/librgw_sal_d3n.so";
-  }
   dl = dlopen(dlname.c_str(), RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
   if (dl) {
     newDriver = (rgw::sal::Driver* (*)(const DoutPrefixProvider *, CephContext *, bool, bool, bool, bool, bool, bool, bool, bool))dlsym(dl, "new_Driver");
@@ -130,10 +127,7 @@ rgw::sal::Driver* DriverManager::init_raw_storage_provider(const DoutPrefixProvi
   auto dlname = fmt::format("/usr/lib64/ceph/librgw_sal_{}.so", cfg.store_name);
   rgw::sal::Driver* store = nullptr;
   void *dl = nullptr;
- rgw::sal::Driver *(*newDriver)(const DoutPrefixProvider *, CephContext *, bool, bool, bool, bool, bool, bool, bool, bool) = nullptr;
-  if (cfg.store_name.compare("d3n") == 0) {
-    dlname = "/usr/lib64/ceph/librgw_sal_d3n.so";
-  }
+  rgw::sal::Driver *(*newDriver)(const DoutPrefixProvider *, CephContext *, bool, bool, bool, bool, bool, bool, bool, bool) = nullptr;
   dl = dlopen(dlname.c_str(), RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
   if (dl) {
     newDriver = (rgw::sal::Driver* (*)(const DoutPrefixProvider *, CephContext *, bool, bool, bool, bool, bool, bool, bool, bool))dlsym(dl, "new_Driver");
