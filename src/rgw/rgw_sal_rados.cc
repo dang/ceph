@@ -321,6 +321,11 @@ int RadosUser::read_stats_async(const DoutPrefixProvider *dpp, RGWGetUserStats_C
   return store->svc()->user->read_stats_async(dpp, get_id(), cb);
 }
 
+int RadosUser::reset_bucket_stats(const DoutPrefixProvider *dpp, optional_yield y)
+{
+  return store->svc()->user->reset_bucket_stats(dpp, get_id(), y);
+}
+
 int RadosUser::complete_flush_stats(const DoutPrefixProvider *dpp, optional_yield y)
 {
   return store->svc()->user->complete_flush_stats(dpp, get_id(), y);

@@ -321,6 +321,18 @@ struct AdminArgs {
   std::optional<std::string> opt_dest_bucket_name;
   std::optional<std::string> opt_dest_bucket_id;
   std::optional<rgw_zone_id> opt_effective_zone_id;
+  std::optional<std::string> opt_prefix;
+  std::optional<std::string> opt_prefix_rm;
+  std::optional<int> opt_priority;
+  std::optional<std::string> opt_mode;
+  std::optional<rgw_user> opt_dest_owner;
+  ceph::timespan opt_retry_delay_ms{std::chrono::milliseconds(2000)};
+  ceph::timespan opt_timeout_sec{std::chrono::seconds(60)};
+  std::optional<std::string> inject_error_at;
+  std::optional<int> inject_error_code;
+  std::optional<std::string> inject_abort_at;
+  rgw::zone_features::set enable_features;
+  rgw::zone_features::set disable_features;
   
   int yes_i_really_mean_it{false};
 };
@@ -331,14 +343,6 @@ class AdminStore {
 
     virtual void add_cmds(SimpleCmd* cmd) = 0;
     virtual int process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args, RGWUserAdminOpState* user_op, RGWUser* ruser) = 0;
-};
-
-class AdminStoreRados : public AdminStore {
-  public:
-    virtual ~AdminStoreRados() {}
-
-    virtual void add_cmds(SimpleCmd* cmd) override;
-    virtual int process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args, RGWUserAdminOpState* user_op, RGWUser* ruser) override;
 };
 
 class AdminStoreDBStore : public AdminStore {

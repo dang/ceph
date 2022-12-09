@@ -16,3 +16,15 @@
 #pragma once
 
 #include "rgw_admin.h"
+
+namespace rgw_admin {
+
+class AdminStoreRados : public AdminStore {
+  public:
+    virtual ~AdminStoreRados() {}
+
+    virtual void add_cmds(SimpleCmd* cmd) override;
+    virtual int process_cmd(CMD opt_cmd, rgw::sal::Store* store, AdminArgs* admin_args, RGWUserAdminOpState* user_op, RGWUser* ruser) override;
+};
+
+} // namespace rgw_admin

@@ -370,6 +370,7 @@ public:
 			 ceph::real_time* last_stats_update = nullptr) override;
   virtual int read_stats_async(const DoutPrefixProvider *dpp,
 			       RGWGetUserStats_CB* cb) override;
+  virtual int reset_bucket_stats(const DoutPrefixProvider *dpp, optional_yield y) override;
   virtual int complete_flush_stats(const DoutPrefixProvider *dpp, optional_yield y) override;
   virtual int read_usage(const DoutPrefixProvider *dpp, uint64_t start_epoch,
 			 uint64_t end_epoch, uint32_t max_entries,

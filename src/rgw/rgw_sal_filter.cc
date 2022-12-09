@@ -625,6 +625,11 @@ int FilterUser::read_stats_async(const DoutPrefixProvider *dpp, RGWGetUserStats_
   return next->read_stats_async(dpp, cb);
 }
 
+int FilterUser::reset_bucket_stats(const DoutPrefixProvider *dpp, optional_yield y)
+{
+  return next->reset_bucket_stats(dpp, y);
+}
+
 int FilterUser::complete_flush_stats(const DoutPrefixProvider *dpp, optional_yield y)
 {
   return next->complete_flush_stats(dpp, y);

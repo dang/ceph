@@ -309,6 +309,11 @@ int MotrUser::read_stats_async(const DoutPrefixProvider *dpp, RGWGetUserStats_CB
   return 0;
 }
 
+int MotrUser::reset_bucket_stats(const DoutPrefixProvider *dpp, optional_yield y)
+{
+  return 0;
+}
+
 int MotrUser::complete_flush_stats(const DoutPrefixProvider *dpp, optional_yield y)
 {
   return 0;

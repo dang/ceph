@@ -175,6 +175,11 @@ namespace rgw::sal {
     return 0;
   }
 
+  int DBUser::reset_bucket_stats(const DoutPrefixProvider *dpp, optional_yield y)
+  {
+    return 0;
+  }
+
   int DBUser::complete_flush_stats(const DoutPrefixProvider *dpp, optional_yield y)
   {
     return 0;

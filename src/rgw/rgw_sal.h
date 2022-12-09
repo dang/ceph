@@ -539,6 +539,8 @@ class User {
 			   ceph::real_time* last_stats_update = nullptr) = 0;
     /** Read the User stats from the backing Store, asynchronous */
     virtual int read_stats_async(const DoutPrefixProvider *dpp, RGWGetUserStats_CB* cb) = 0;
+    /** Reset the bucket stats for this user */
+    virtual int reset_bucket_stats(const DoutPrefixProvider *dpp, optional_yield y) = 0;
     /** Flush accumulated stat changes for this User to the backing store */
     virtual int complete_flush_stats(const DoutPrefixProvider *dpp, optional_yield y) = 0;
     /** Read detailed usage stats for this User from the backing store */
