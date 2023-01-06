@@ -35,7 +35,7 @@
 #include "rgw_metadata.h"
 #include "rgw_otp.h"
 #include "rgw_user.h"
-#include "rgw_role.h"
+#include "driver/rados/rgw_role.h"
 
 #define dout_subsys ceph_subsys_rgw
 

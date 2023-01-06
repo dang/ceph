@@ -234,7 +234,6 @@ set(rgw_a_srcs
   rgw_os_lib.cc
   rgw_rest_config.cc
   rgw_rest_info.cc
-  rgw_rest_metadata.cc
   rgw_rest_ratelimit.cc
   rgw_rest_sts.cc
   rgw_rest_swift.cc
@@ -257,6 +256,7 @@ add_library(rgw_a STATIC ${rgw_a_srcs})
 target_compile_definitions(rgw_a PUBLIC "-DCLS_CLIENT_HIDE_IOCTX")
 
 target_include_directories(rgw_a
+  SYSTEM PUBLIC "../s3select/rapidjson/include"
   PUBLIC "${CMAKE_SOURCE_DIR}/src/dmclock/support/src"
   PUBLIC "${CMAKE_SOURCE_DIR}/src/rgw"
   PUBLIC "${CMAKE_SOURCE_DIR}/src/rgw/driver/rados"
@@ -390,9 +390,11 @@ set(rados_sal_srcs
   driver/rados/rgw_reshard.cc
   driver/rados/rgw_rest_bucket.cc
   driver/rados/rgw_rest_log.cc
+  driver/rados/rgw_rest_metadata.cc
   driver/rados/rgw_rest_pubsub.cc
   driver/rados/rgw_rest_realm.cc
   driver/rados/rgw_rest_user.cc
+  driver/rados/rgw_role.cc
   driver/rados/rgw_sal_rados.cc
   driver/rados/rgw_service.cc
   driver/rados/rgw_sync.cc
@@ -484,6 +486,7 @@ set_target_properties(rados_sal PROPERTIES COMPILE_FLAGS "-fPIC")
 set(rgw_sal_rados_srcs rgw_sal_rados_plugin.cc)
 add_library(rgw_sal_rados SHARED $<TARGET_OBJECTS:rados_sal> ${rgw_sal_rados_srcs})
 target_include_directories(rgw_sal_rados
+  SYSTEM PUBLIC "../rapidjson/include"
   PUBLIC "services"
   PUBLIC "${CMAKE_SOURCE_DIR}/src/rgw"
   PUBLIC "${CMAKE_SOURCE_DIR}/src/rgw/driver/rados"
@@ -638,6 +641,8 @@ target_link_libraries(radosgw-admin ${rgw_libs} rados_sal
   OATH::OATH
   ${CURL_LIBRARIES} ${EXPAT_LIBRARIES} ${BLKID_LIBRARIES}
   rgw_common)
+target_include_directories(radosgw-admin
+  SYSTEM PUBLIC "../rapidjson/include")
 install(TARGETS radosgw-admin DESTINATION bin)
 
 set(radosgw_es_srcs

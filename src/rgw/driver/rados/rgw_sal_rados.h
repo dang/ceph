@@ -19,7 +19,7 @@
 #include "rgw_rados.h"
 #include "rgw_notify.h"
 #include "rgw_oidc_provider.h"
-#include "rgw_role.h"
+#include "../../rgw_role.h"
 #include "rgw_multi.h"
 #include "rgw_putobj_processor.h"
 #include "services/svc_tier_rados.h"
