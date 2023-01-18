@@ -21,6 +21,7 @@
 #include "rgw_bucket_sync_cache.h"
 #include "rgw_datalog.h"
 #include "rgw_metadata.h"
+#include "rgw_user.h"
 #include "rgw_sync_counters.h"
 #include "rgw_sync_error_repo.h"
 #include "rgw_sync_module.h"

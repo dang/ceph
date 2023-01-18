@@ -35,7 +35,7 @@
 
 #include "rgw_zone.h"
 #include "rgw_rest_conn.h"
-#include "rgw_service.h"
+#include "driver/rados/rgw_service.h"
 #include "services/svc_sys_obj.h"
 #include "services/svc_zone.h"
 #include "services/svc_tier_rados.h"
@@ -44,7 +44,7 @@
 #include "services/svc_zone_utils.h"
 #include "cls/rgw/cls_rgw_client.h"
 
-#include "rgw_pubsub.h"
+#include "driver/rados/rgw_pubsub.h"
 
 #define dout_subsys ceph_subsys_rgw
 

@@ -32,7 +32,7 @@
 #include "rgw_user_types.h"
 #include "rgw_bucket_types.h"
 #include "rgw_obj_types.h"
-#include "rgw_obj_manifest.h"
+#include "driver/rados/rgw_obj_manifest.h"
 
 #include "common/Formatter.h"
 

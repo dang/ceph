@@ -16,11 +16,12 @@
 #pragma once
 
 #include "rgw_sal_fwd.h"
+#include "rgw_common.h"
 #include "rgw_lua.h"
-#include "rgw_user.h"
 #include "rgw_notify_event_type.h"
+#include "rgw_bucket_types.h"
 #include "common/tracer.h"
-#include "rgw_datalog_notify.h"
+#include "common/RefCountedObj.h"
 #include "include/random.h"
 
 class RGWRESTMgr;
@@ -35,7 +36,9 @@ class RGWDataSyncStatusManager;
 class RGWSyncModuleInstance;
 typedef std::shared_ptr<RGWSyncModuleInstance> RGWSyncModuleInstanceRef;
 class RGWCompressionInfo;
+struct rgw_data_notify_entry;
 
+#define RGW_NO_SHARD -1
 
 using RGWBucketListNameFilter = std::function<bool (const std::string&)>;
 

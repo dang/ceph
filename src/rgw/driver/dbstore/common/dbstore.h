@@ -16,10 +16,11 @@
 #include "rgw_sal_store.h"
 #include "rgw_common.h"
 #include "driver/rados/rgw_bucket.h"
+#include "driver/rados/rgw_user.h"
 #include "global/global_context.h"
 #include "global/global_init.h"
 #include "common/ceph_context.h"
-#include "rgw_obj_manifest.h"
+#include "driver/rados/rgw_obj_manifest.h"
 #include "rgw_multi.h"
 
 namespace rgw { namespace store {

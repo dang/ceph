@@ -10,6 +10,7 @@
 #include "rgw_acl_s3.h"
 #include "rgw_aio_throttle.h"
 #include "rgw_compression.h"
+#include "rgw_datalog_notify.h"
 
 #define dout_subsys ceph_subsys_rgw
 

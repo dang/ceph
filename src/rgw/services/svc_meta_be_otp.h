@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "rgw_service.h"
+#include "driver/rados/rgw_service.h"
 
 #include "svc_cls.h"
 #include "svc_meta_be.h"

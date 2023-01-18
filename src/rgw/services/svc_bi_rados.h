@@ -17,7 +17,7 @@
 #pragma once
 
 #include "rgw_datalog.h"
-#include "rgw_service.h"
+#include "driver/rados/rgw_service.h"
 #include "rgw_tools.h"
 
 #include "svc_bi.h"

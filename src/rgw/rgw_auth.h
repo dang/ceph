@@ -17,7 +17,6 @@
 
 #define RGW_USER_ANON_ID "anonymous"
 
-class RGWCtl;
 struct rgw_log_entry;
 struct req_state;
 

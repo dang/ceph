@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "rgw_service.h"
+#include "driver/rados/rgw_service.h"
 
 #include "svc_rados.h"
 #include "svc_sys_obj.h"

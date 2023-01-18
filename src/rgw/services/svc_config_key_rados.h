@@ -20,7 +20,7 @@
 
 #include <atomic>
 
-#include "rgw_service.h"
+#include "driver/rados/rgw_service.h"
 
 #include "svc_config_key.h"
 

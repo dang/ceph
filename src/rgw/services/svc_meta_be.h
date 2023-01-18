@@ -19,7 +19,7 @@
 
 #include "svc_meta_be_params.h"
 
-#include "rgw_service.h"
+#include "driver/rados/rgw_service.h"
 #include "rgw_mdlog_types.h"
 
 class RGWMetadataLogData;
